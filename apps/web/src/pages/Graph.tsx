@@ -13,6 +13,7 @@ import { Markdown } from "../components/Markdown.js";
 import { Badge, Button, cx } from "../components/ui.js";
 import { useApi, useApp } from "../lib/store.js";
 import { HandTracker, drawHands, type HandFrame } from "../lib/vision/handTracker.js";
+import { GestureMotion, cameraViewport } from "../lib/vision/gestureMotion.js";
 import { BrowserVoice } from "../lib/voice/browserVoice.js";
 import { BlobPlayer } from "../lib/voice/player.js";
 
@@ -71,19 +72,23 @@ export function Graph() {
   const highlight = useRef<{ active: boolean; nodes: Set<string>; links: Set<string> }>({ active: false, nodes: new Set(), links: new Set() });
   const hoverRef = useRef<string | null>(null);
   const selectedRef = useRef<string | null>(null);
-  const gesture = useRef<{ prevPalm: { x: number; y: number } | null; prevPair: number | null; grabbing: FGNode | null; depth: number }>({ prevPalm: null, prevPair: null, grabbing: null, depth: 100 });
+  const gesture = useRef<{ grabbing: FGNode | null; depth: number; offset: { x: number; y: number; z: number } }>({ grabbing: null, depth: 100, offset: { x: 0, y: 0, z: 0 } });
+  const motion = useRef(new GestureMotion());
   const tracker = useRef<HandTracker | null>(null);
   const fullOverlayRef = useRef<HTMLCanvasElement>(null);
-  const immersiveRef = useRef<{ tex: any; plane: any; three: any } | null>(null);
-  const smooth = useRef<{ x: number; y: number } | null>(null);
+  const immersiveRef = useRef<{ tex: any } | null>(null);
   const [immersive, setImmersive] = useState(true);
-  const autoStarted = useRef(false);
+  const immersiveOn = useRef(true);
+  const mounted = useRef(true);
+  const fitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reducedMotion = useRef(typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const voice = useRef<BrowserVoice | null>(null);
   const player = useRef(new BlobPlayer());
 
   const [capture, setCapture] = useState<Capture | null>(null);
   const [data, setData] = useState<GraphData | null>(null);
   const [ready, setReady] = useState(false);
+  const [graphError, setGraphError] = useState<string | null>(null);
   const [selected, setSelected] = useState<FGNode | null>(null);
   const [answer, setAnswer] = useState<AskResult | null>(null);
   const [asking, setAsking] = useState(false);
@@ -129,7 +134,8 @@ export function Graph() {
     const g = graphRef.current;
     if (!g) return;
     const hl = highlight.current;
-    const SpriteText = (await import("three-spritetext")).default;
+    const [{ default: SpriteText }, THREE] = await Promise.all([import("three-spritetext"), import("three")]);
+    if (graphRef.current !== g) return;
     g.nodeColor((n: FGNode) => {
       const c = COLORS[n.group] ?? "#cccccc";
       if (!hl.active) return c;
@@ -143,20 +149,35 @@ export function Graph() {
     g.linkWidth((l: FGLink) => (hl.active && hl.links.has(linkKey(l)) ? 0.9 : l.kind === "in" ? 0.5 : 0.22));
     g.linkDirectionalParticles((l: FGLink) => (hl.active && hl.links.has(linkKey(l)) ? 3 : 0));
     g.nodeThreeObject((n: FGNode) => {
+      const active = !hl.active || hl.nodes.has(n.id) || selectedRef.current === n.id || hoverRef.current === n.id;
+      const color = COLORS[n.group] ?? "#cccccc";
+      const radius = Math.cbrt(n.val) * 2.8;
+      const group = new THREE.Group();
+      const material = new THREE.MeshPhysicalMaterial({
+        color, metalness: 0.28, roughness: 0.28, clearcoat: 0.9, clearcoatRoughness: 0.18,
+        emissive: color, emissiveIntensity: active && (selectedRef.current === n.id || hoverRef.current === n.id) ? 0.28 : 0.04,
+        transparent: !active, opacity: active ? 1 : 0.14, depthWrite: active,
+      });
+      group.add(new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), material));
+      if (n.kind === "domain" && active) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.45, 0.12, 6, 48), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.38 }));
+        ring.rotation.x = Math.PI * 0.35;
+        group.add(ring);
+      }
       const show = n.kind === "domain" || (n.kind === "entity" && n.group !== "topic") || hl.nodes.has(n.id) || selectedRef.current === n.id || hoverRef.current === n.id;
-      if (!show) return false;
-      const dimmed = hl.active && !hl.nodes.has(n.id) && selectedRef.current !== n.id && hoverRef.current !== n.id;
-      if (dimmed) return false;
-      const text = n.label.length > 36 ? `${n.label.slice(0, 35)}…` : n.label;
-      const s = new SpriteText(text);
-      s.color = n.kind === "domain" ? "#f6e3c3" : n.kind === "entity" ? COLORS[n.group] : "#f6f1e9";
-      s.textHeight = n.kind === "domain" ? 3.8 : n.kind === "entity" ? 2.6 : 2.9;
-      s.fontFace = n.kind === "domain" ? "Georgia, serif" : "Inter, sans-serif";
-      s.backgroundColor = "rgba(14,13,11,0.6)";
-      s.padding = 1.4;
-      s.borderRadius = 2;
-      s.position.y = -(Math.cbrt(n.val) * 4 + 5);
-      return s;
+      if (show && active) {
+        const text = n.label.length > 36 ? `${n.label.slice(0, 35)}…` : n.label;
+        const label = new SpriteText(text);
+        label.color = n.kind === "domain" ? "#f6e3c3" : n.kind === "entity" ? color : "#f6f1e9";
+        label.textHeight = n.kind === "domain" ? 3.8 : n.kind === "entity" ? 2.6 : 2.9;
+        label.fontFace = n.kind === "domain" ? "Georgia, serif" : "Inter, sans-serif";
+        label.backgroundColor = "rgba(14,18,23,0.82)";
+        label.padding = 1.4;
+        label.borderRadius = 2;
+        label.position.y = -(radius + 5);
+        group.add(label);
+      }
+      return group;
     });
   }, []);
 
@@ -205,7 +226,7 @@ export function Graph() {
     const dy = cam.y - c.y;
     const dz = cam.z - c.z;
     const len = Math.hypot(dx, dy, dz) || 1;
-    g.cameraPosition({ x: c.x + (dx / len) * distance, y: c.y + (dy / len) * distance, z: c.z + (dz / len) * distance }, c, ms);
+    g.cameraPosition({ x: c.x + (dx / len) * distance, y: c.y + (dy / len) * distance, z: c.z + (dz / len) * distance }, c, reducedMotion.current ? 0 : ms);
   }, []);
 
   const select = useCallback(
@@ -225,6 +246,8 @@ export function Graph() {
   useEffect(() => {
     if (!data || !containerRef.current) return;
     let disposed = false;
+    setReady(false);
+    setGraphError(null);
     let ro: ResizeObserver | null = null;
     (async () => {
       const [{ default: ForceGraph3D }, THREE, { UnrealBloomPass }] = await Promise.all([
@@ -249,11 +272,11 @@ export function Graph() {
         .nodeRelSize(2.8)
         .nodeOpacity(0.96)
         .nodeResolution(20)
-        .nodeThreeObjectExtend(true)
+        .nodeThreeObjectExtend(false)
         .nodeLabel(() => "")
         .linkOpacity(1)
         .linkDirectionalParticleWidth(1.5)
-        .linkDirectionalParticleSpeed(0.008)
+        .linkDirectionalParticleSpeed(reducedMotion.current ? 0 : 0.004)
         .linkDirectionalParticleColor(() => "#f6e3c3")
         .onNodeClick((n: FGNode) => select(n))
         .onNodeHover((n: FGNode | null) => {
@@ -265,7 +288,18 @@ export function Graph() {
         .graphData({ nodes, links });
       g.d3Force("charge").strength(-140);
       g.d3Force("link").distance((l: FGLink) => (l.kind === "in" ? 42 : l.kind === "mentions" ? 34 : 64));
-      const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.9, 0.5, 0.28);
+      const renderer = g.renderer();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+      const keyLight = new THREE.DirectionalLight(0xffefd8, 3.2);
+      keyLight.position.set(-120, 180, 240);
+      const rimLight = new THREE.DirectionalLight(0x89baff, 2.2);
+      rimLight.position.set(160, -50, -180);
+      g.lights([new THREE.HemisphereLight(0xcbdff9, 0x131924, 2), keyLight, rimLight]);
+      g.controls().enableDamping = true;
+      g.controls().dampingFactor = 0.12;
+      const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.24, 0.4, 0.8);
       g.postProcessingComposer().addPass(bloom);
       ro = new ResizeObserver(() => {
         g.width(el.clientWidth).height(el.clientHeight);
@@ -273,23 +307,29 @@ export function Graph() {
       });
       ro.observe(el);
       await applyStyles();
+      if (disposed) return;
       let fitted = false;
       g.onEngineStop(() => {
         if (fitted) return;
         fitted = true;
-        g.zoomToFit(1000, 40);
+        g.zoomToFit(reducedMotion.current ? 0 : 900, 65);
       });
-      setTimeout(() => {
-        if (!fitted) {
+      fitTimer.current = setTimeout(() => {
+        if (!disposed && !fitted) {
           fitted = true;
-          g.zoomToFit(1000, 40);
+          g.zoomToFit(reducedMotion.current ? 0 : 900, 65);
         }
       }, 2500);
       setReady(true);
-    })().catch((e) => toast(`Could not start the 3D view: ${(e as Error).message}`, "error"));
+    })().catch((e) => {
+      if (disposed) return;
+      setGraphError((e as Error).message);
+      toast(`Could not start the 3D view: ${(e as Error).message}`, "error");
+    });
     return () => {
       disposed = true;
       ro?.disconnect();
+      if (fitTimer.current) clearTimeout(fitTimer.current);
       try {
         graphRef.current?._destructor?.();
       } catch {
@@ -342,46 +382,26 @@ export function Graph() {
     }
   };
 
-  /** Put the live camera behind the constellation (mirrored, dimmed) so the presenter stands inside the graph. */
+  /** The real camera lives in a contained video layer, with matching landmark coordinates. */
   const enterImmersive = async () => {
     const g = graphRef.current;
-    const video = videoRef.current;
-    if (!g || !video || immersiveRef.current) return;
+    if (!g || !tracker.current?.running || !immersiveOn.current) return;
+    // Keep recording support: the graph canvas uses the same video texture.
     const THREE = await import("three");
-    const tex = new THREE.VideoTexture(video);
+    if (!mounted.current || graphRef.current !== g || !tracker.current?.running || !immersiveOn.current || immersiveRef.current) return;
+    const tex = new THREE.VideoTexture(videoRef.current!);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = THREE.RepeatWrapping;
-    tex.repeat.x = -1; // mirror, like a mirror
-    const scene = g.scene();
-    const cam = g.camera();
-    scene.background = tex;
-    // A dark, camera-locked veil far behind the nodes keeps the graph legible over the video.
-    const D = 4000;
-    cam.far = Math.max(cam.far, D + 1000);
-    cam.updateProjectionMatrix();
-    const h = 2 * D * Math.tan((cam.fov * Math.PI) / 360) * 1.15;
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(h * cam.aspect, h), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false }));
-    plane.position.set(0, 0, -D);
-    plane.renderOrder = -1;
-    if (!cam.parent) scene.add(cam);
-    cam.add(plane);
-    immersiveRef.current = { tex, plane, three: THREE };
+    tex.repeat.x = -1;
+    immersiveRef.current = { tex };
+    // CSS video preserves aspect ratio; a transparent renderer keeps the real feed crisp.
+    g.backgroundColor("rgba(14,16,19,0)");
   };
 
   const exitImmersive = () => {
-    const g = graphRef.current;
-    const im = immersiveRef.current;
-    if (!im) return;
+    immersiveRef.current?.tex.dispose();
     immersiveRef.current = null;
-    try {
-      im.plane.parent?.remove(im.plane);
-      im.plane.geometry.dispose();
-      im.plane.material.dispose();
-      im.tex.dispose();
-      g?.backgroundColor("#0e1013");
-    } catch {
-      /* ignore */
-    }
+    graphRef.current?.backgroundColor("#0e1013");
     const cv = fullOverlayRef.current;
     if (cv) cv.getContext("2d")?.clearRect(0, 0, cv.width, cv.height);
   };
@@ -403,147 +423,113 @@ export function Graph() {
     if (cv) drawHands(cv.getContext("2d")!, f.hands, cv.width, cv.height);
     const full = fullOverlayRef.current;
     const el = containerRef.current;
-    if (full && el) {
-      if (full.width !== el.clientWidth || full.height !== el.clientHeight) {
-        full.width = el.clientWidth;
-        full.height = el.clientHeight;
-      }
-      if (immersiveRef.current) drawHands(full.getContext("2d")!, f.hands, full.width, full.height);
-    }
-    if (f.fps !== fps) setFps(f.fps);
     const g = graphRef.current;
+    setFps((previous) => previous === f.fps ? previous : f.fps);
     if (!el || !g) return;
-    const W = el.clientWidth;
-    const H = el.clientHeight;
+    const viewport = immersiveOn.current
+      ? cameraViewport(el.clientWidth, el.clientHeight, videoRef.current?.videoWidth ?? 640, videoRef.current?.videoHeight ?? 480)
+      : { x: 0, y: 0, width: el.clientWidth, height: el.clientHeight };
+    if (full) {
+      if (full.width !== el.clientWidth || full.height !== el.clientHeight) { full.width = el.clientWidth; full.height = el.clientHeight; }
+      const ctx = full.getContext("2d")!;
+      ctx.clearRect(0, 0, full.width, full.height);
+      if (immersiveOn.current) {
+        ctx.save();
+        ctx.translate(viewport.x, viewport.y);
+        drawHands(ctx, f.hands, viewport.width, viewport.height);
+        ctx.restore();
+      }
+    }
+    const input = motion.current.update(f.hands);
     const gs = gesture.current;
-    // Light exponential smoothing on the primary hand's key points to tame landmark jitter.
-    const hands = f.hands.map((h, i) => {
-      if (i !== 0) return h;
-      const k = 0.55;
-      const prev = smooth.current;
-      const pointer = prev ? { x: prev.x + (h.pointer.x - prev.x) * k, y: prev.y + (h.pointer.y - prev.y) * k } : h.pointer;
-      smooth.current = pointer;
-      return { ...h, pointer };
-    });
-    if (!hands.length) smooth.current = null;
-
-    if (hands.length === 2 && hands.every((h) => h.open || h.pointing)) {
-      release();
-      const d = Math.hypot(hands[0].palm.x - hands[1].palm.x, hands[0].palm.y - hands[1].palm.y);
-      if (gs.prevPair) {
-        const ratio = gs.prevPair / d;
-        if (Math.abs(ratio - 1) > 0.004) orbit(0, 0, clamp(ratio, 0.94, 1.06));
-      }
-      gs.prevPair = d;
-      gs.prevPalm = null;
-      showCursor(null);
-      setModeSafe("zoom");
-      return;
-    }
-    gs.prevPair = null;
-    const h = hands[0];
-    if (!h) {
-      release();
-      gs.prevPalm = null;
-      showCursor(null);
-      setModeSafe("none");
-      return;
-    }
-    if (h.pinch) {
-      const px = h.pinchPoint.x * W;
-      const py = h.pinchPoint.y * H;
-      showCursor(px, py, "pinch");
-      if (!gs.grabbing) {
-        const n = nearestNode(px, py, 46);
-        if (n) {
-          gs.grabbing = n;
-          const cam = g.cameraPosition();
-          gs.depth = Math.hypot(cam.x - (n.x ?? 0), cam.y - (n.y ?? 0), cam.z - (n.z ?? 0));
-          if (hoverRef.current !== n.id) {
-            hoverRef.current = n.id;
-            void applyStyles();
-          }
-        }
-      }
-      if (gs.grabbing) {
-        const q = g.screen2GraphCoords(px, py, gs.depth);
-        gs.grabbing.fx = q.x;
-        gs.grabbing.fy = q.y;
-        gs.grabbing.fz = q.z;
-        g.d3ReheatSimulation();
-        setModeSafe("grab");
-        gs.prevPalm = null;
-      } else {
-        // Pinching empty space drags the view, like a mouse drag.
-        if (gs.prevPalm) orbit(-(h.pinchPoint.x - gs.prevPalm.x) * 3.4, (h.pinchPoint.y - gs.prevPalm.y) * 2.6);
-        gs.prevPalm = h.pinchPoint;
-        setModeSafe("pinch");
-      }
-      return;
-    }
-    if (gs.grabbing) {
+    if (input.cancelled) release();
+    if (input.pinchReleased && gs.grabbing) {
       const grabbed = gs.grabbing;
       release();
       select(grabbed);
     }
-    if (h.pointing) {
-      const px = h.pointer.x * W;
-      const py = h.pointer.y * H;
+    if (input.mode === "zoom") {
+      if (input.zoom && Math.abs(input.zoom - 1) > 0.003) orbit(0, 0, input.zoom);
+      showCursor(null);
+      setModeSafe("zoom");
+      return;
+    }
+    const px = input.pointer ? clamp(viewport.x + input.pointer.x * viewport.width, 0, el.clientWidth) : 0;
+    const py = input.pointer ? clamp(viewport.y + input.pointer.y * viewport.height, 0, el.clientHeight) : 0;
+    if (input.mode === "pinch") {
+      showCursor(px, py, "pinch");
+      // Only the beginning of a pinch can pick up a node. A camera drag stays a camera drag.
+      if (input.pinchStarted) {
+        const n = nearestNode(px, py, 32);
+        if (n) {
+          gs.grabbing = n;
+          const cam = g.cameraPosition();
+          gs.depth = Math.hypot(cam.x - (n.x ?? 0), cam.y - (n.y ?? 0), cam.z - (n.z ?? 0));
+          const q = g.screen2GraphCoords(px, py, gs.depth);
+          gs.offset = { x: (n.x ?? 0) - q.x, y: (n.y ?? 0) - q.y, z: (n.z ?? 0) - q.z };
+          hoverRef.current = n.id;
+          void applyStyles();
+        }
+      }
+      if (gs.grabbing) {
+        const q = g.screen2GraphCoords(px, py, gs.depth);
+        gs.grabbing.fx = q.x + gs.offset.x;
+        gs.grabbing.fy = q.y + gs.offset.y;
+        gs.grabbing.fz = q.z + gs.offset.z;
+        g.d3ReheatSimulation();
+        setModeSafe("grab");
+      } else {
+        if (input.rotate) orbit(input.rotate.x, input.rotate.y);
+        setModeSafe("pinch");
+      }
+      return;
+    }
+    if (input.mode === "point") {
       showCursor(px, py, "point");
-      const n = nearestNode(px, py, 34);
-      const nid = n?.id ?? null;
-      if (hoverRef.current !== nid) {
-        hoverRef.current = nid;
-        void applyStyles();
-      }
-      gs.prevPalm = null;
-      setModeSafe("point");
-      return;
+      const n = nearestNode(px, py, 28);
+      if (hoverRef.current !== (n?.id ?? null)) { hoverRef.current = n?.id ?? null; void applyStyles(); }
+    } else {
+      showCursor(null);
+      if (hoverRef.current !== null) { hoverRef.current = null; void applyStyles(); }
+      if (input.rotate) orbit(input.rotate.x, input.rotate.y);
     }
-    showCursor(null);
-    if (h.open) {
-      if (gs.prevPalm) {
-        const dx = h.palm.x - gs.prevPalm.x;
-        const dy = h.palm.y - gs.prevPalm.y;
-        if (Math.abs(dx) + Math.abs(dy) > 0.0015) orbit(-dx * 3.4, dy * 2.6);
-      }
-      gs.prevPalm = h.palm;
-      setModeSafe("orbit");
-      return;
-    }
-    gs.prevPalm = null;
-    setModeSafe(h.fist ? "hold" : "none");
+    setModeSafe(input.mode);
   };
 
-  const toggleCamera = async (opts: { silent?: boolean } = {}) => {
-    if (camOn) {
-      exitImmersive();
-      tracker.current?.stop();
-      tracker.current = null;
-      setCamOn(false);
-      setModeSafe("off");
-      showCursor(null);
-      return;
-    }
-    if (!HandTracker.supported()) {
-      if (!opts.silent) toast("Camera hand tracking isn't available in this browser.", "error");
-      return;
-    }
+  const stopCamera = () => {
+    tracker.current?.stop();
+    tracker.current = null;
+    release();
+    motion.current.reset();
+    exitImmersive();
+    setCamOn(false);
+    setCamStatus("");
+    setFps(0);
+    setModeSafe("off");
+    showCursor(null);
+    hoverRef.current = null;
+    void applyStyles();
+  };
+
+  const toggleCamera = async () => {
+    if (tracker.current) { stopCamera(); return; }
+    if (!HandTracker.supported()) { toast("Camera hand tracking needs a secure browser with camera support. Chrome or Edge works best.", "error"); return; }
+    const t = new HandTracker(videoRef.current!, onFrame, (message) => {
+      if (!mounted.current || tracker.current !== t) return;
+      stopCamera();
+      toast(message, "error");
+    });
+    tracker.current = t;
+    setCamOn(true);
     try {
-      const t = new HandTracker(videoRef.current!, onFrame);
-      tracker.current = t;
-      setCamOn(true);
-      await t.start(setCamStatus);
+      const started = await t.start((status) => { if (tracker.current === t && mounted.current) setCamStatus(status); });
+      if (!started || tracker.current !== t || !mounted.current) return;
       setModeSafe("none");
-      if (immersive) await enterImmersive();
+      if (immersiveOn.current) await enterImmersive();
     } catch (e) {
-      // A denied or missing camera is normal: fall back quietly to mouse + voice.
-      if (opts.silent) say("Camera unavailable — mouse, keyboard and voice still work");
-      else toast(`Camera: ${(e as Error).message}`, "error");
-      tracker.current = null;
-      setCamOn(false);
-      setModeSafe("off");
-      setCamStatus("");
+      if (tracker.current !== t || !mounted.current) return;
+      stopCamera();
+      toast((e as Error).message, "error");
     }
   };
 
@@ -726,19 +712,29 @@ export function Graph() {
   };
 
   const toggleImmersive = async () => {
-    const next = !immersive;
+    const next = !immersiveOn.current;
+    immersiveOn.current = next;
     setImmersive(next);
-    if (!camOn) return;
+    motion.current.reset();
+    release();
+    if (!tracker.current?.running) return;
     if (next) await enterImmersive();
     else exitImmersive();
   };
 
   useEffect(
-    () => () => {
-      exitImmersive();
+    () => {
+      mounted.current = true;
+      return () => {
+      mounted.current = false;
       tracker.current?.stop();
+      tracker.current = null;
+      release();
+      exitImmersive();
+      window.clearTimeout(hudTimer.current);
       voice.current?.destroy();
       player.current.stop();
+      };
     },
     [],
   );
@@ -772,21 +768,12 @@ export function Graph() {
     say("Recording the constellation");
   };
 
-  // The constellation opens with the live camera behind it so the graph can be moved by hand right away.
-  useEffect(() => {
-    if (!ready || autoStarted.current || !HandTracker.supported()) return;
-    autoStarted.current = true;
-    const t = setTimeout(() => {
-      if (!tracker.current) void toggleCamera({ silent: true });
-    }, 600);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready]);
-
   const reset = () => {
     select(null);
     setAnswer(null);
-    graphRef.current?.zoomToFit(900, 60);
+    release();
+    motion.current.reset();
+    graphRef.current?.zoomToFit(reducedMotion.current ? 0 : 900, 65);
   };
 
   const first = capture?.expert.name.split(" ")[0] ?? "";
@@ -805,7 +792,7 @@ export function Graph() {
 
   return (
     <div className="relative flex h-screen flex-col bg-paper text-ink">
-      <header className="z-10 flex items-center gap-3 border-b border-line px-5 py-3">
+      <header className="z-10 flex shrink-0 flex-wrap items-center gap-3 border-b border-line px-5 py-3">
         <Link to={`/c/${id}`} className="inline-flex items-center gap-1.5 text-[13px] text-ink-2 hover:text-ink">
           <ArrowLeft className="h-4 w-4" /> {capture?.expert.name ?? "Back"}
         </Link>
@@ -815,11 +802,11 @@ export function Graph() {
             {data.stats.atoms} atoms · {data.stats.domains} domains · {data.stats.entities} people & systems · {data.stats.links} links
           </span>
         )}
-        <div className="ml-auto flex items-center gap-2">
-          <Badge tone={camOn ? "accent" : "neutral"} icon={<Hand className="h-3 w-3" />}>
+        <div className="ml-auto flex max-w-full flex-wrap items-center gap-2">
+          <Badge className="hidden xl:inline-flex" tone={camOn ? "accent" : "neutral"} icon={<Hand className="h-3 w-3" />}>
             {camOn ? (mode === "off" ? camStatus || "Starting camera… allow access" : `${MODE_TEXT[mode]}${fps ? ` · ${fps} fps` : ""}`) : "Camera off · click “Use my hands”"}
           </Badge>
-          <Button size="sm" variant={camOn ? "accent" : "secondary"} onClick={toggleCamera} icon={camOn ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}>
+          <Button size="sm" variant={camOn ? "accent" : "secondary"} onClick={() => toggleCamera()} icon={camOn ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}>
             {camOn ? "Stop camera" : "Use my hands"}
           </Button>
           {camOn && (
@@ -858,15 +845,25 @@ export function Graph() {
       </header>
 
       <div className="relative min-h-0 flex-1">
+        <div className="pointer-events-none absolute inset-0 bg-[#0e1013]" />
+        {/* camera feed: drives hand tracking and (in immersive mode) the scene background */}
+        <video
+          ref={videoRef}
+          className={cx("pointer-events-none absolute object-contain", camOn && immersive ? "inset-0 h-full w-full opacity-50" : camOn ? "bottom-4 left-4 h-[150px] w-[200px] rounded-xl opacity-100" : "bottom-0 left-0 h-px w-px opacity-0")}
+          style={{ transform: "scaleX(-1)" }}
+          playsInline
+          muted
+        />
         <div ref={containerRef} className="absolute inset-0" />
         <canvas ref={fullOverlayRef} className={cx("pointer-events-none absolute inset-0 h-full w-full", camOn && immersive ? "opacity-90" : "opacity-0")} />
-        {!ready && (
-          <div className="absolute inset-0 grid place-items-center text-ink-2">
+        {!ready && !graphError && (
+          <div className="absolute inset-0 grid place-items-center text-white/70">
             <div className="flex items-center gap-3">
               <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-accent-2" /> Arranging {first ? `${first}'s` : "the"} knowledge…
             </div>
           </div>
         )}
+        {graphError && <div role="alert" className="absolute inset-0 grid place-items-center p-8 text-white"><div className="max-w-md rounded-xl border border-white/15 bg-[#151b24] p-6"><h2 className="text-xl">The 3D view could not start</h2><p className="mt-2 text-sm text-white/70">Enable hardware acceleration in your browser, then reload. You can still explore all captured knowledge.</p><Link to={`/c/${id}/knowledge`} className="mt-4 inline-block text-accent-2 underline">Open knowledge base</Link></div></div>}
         {/* gesture cursor */}
         <div ref={cursorRef} className="pointer-events-none absolute left-0 top-0 h-7 w-7 rounded-full border-2 opacity-0 transition-opacity" style={{ boxShadow: "0 0 18px 4px rgba(232,179,107,.45)", borderColor: "#f6e3c3" }} />
 
@@ -875,7 +872,7 @@ export function Graph() {
 
         {/* details / answer panel */}
         {(selected || answer) && (
-          <aside className="absolute right-4 top-4 w-[360px] max-h-[calc(100%-2rem)] overflow-y-auto scrollbar-thin rounded-xl border border-line-2 bg-paper-2/92 p-4 shadow-lift backdrop-blur rise-in">
+          <aside className="absolute right-4 top-4 w-[min(360px,calc(100%-2rem))] max-h-[calc(100%-2rem)] overflow-y-auto scrollbar-thin rounded-xl border border-line-2 bg-paper-2/92 p-4 shadow-lift backdrop-blur rise-in">
             {answer && (
               <div>
                 <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted font-semibold">
@@ -935,14 +932,6 @@ export function Graph() {
           </aside>
         )}
 
-        {/* camera feed: drives hand tracking and (in immersive mode) the scene background */}
-        <video
-          ref={videoRef}
-          className={cx("absolute rounded-xl object-cover", camOn && !immersive ? "bottom-4 left-4 h-[150px] w-[200px] opacity-100" : "bottom-0 left-0 h-px w-px opacity-0")}
-          style={{ transform: "scaleX(-1)" }}
-          playsInline
-          muted
-        />
         {/* camera PiP */}
         <div className={cx("absolute bottom-4 left-4 overflow-hidden rounded-lg border border-line-2 bg-black/60 shadow-lift", camOn && !immersive ? "block" : "hidden")} style={{ width: 200, height: 150 }}>
           <canvas ref={overlayRef} width={200} height={150} className="absolute inset-0 h-full w-full" />
@@ -950,8 +939,8 @@ export function Graph() {
         </div>
 
         {/* legend + help */}
-        <div className="pointer-events-none absolute bottom-4 right-4 flex flex-col items-end gap-2">
-          <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 rounded-xl bg-paper-2/80 px-3 py-2 text-[11px] text-ink-2 backdrop-blur">
+        <div className="pointer-events-none absolute bottom-4 right-4 left-4 flex flex-col items-end gap-2">
+          <div className="hidden max-w-3xl flex-wrap justify-end gap-x-3 gap-y-1 rounded-xl md:flex bg-paper-2/80 px-3 py-2 text-[11px] text-ink-2 backdrop-blur">
             {legend.map(([k, label]) => (
               <span key={k} className="inline-flex items-center gap-1.5">
                 <span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORS[k], boxShadow: `0 0 6px ${COLORS[k]}` }} />
@@ -959,7 +948,7 @@ export function Graph() {
               </span>
             ))}
           </div>
-          <div className="rounded-xl bg-paper-2/80 px-3 py-2 text-[11px] text-ink-2 backdrop-blur">
+          <div className="max-w-3xl rounded-xl bg-paper-2/90 px-3 py-2 text-[11px] text-ink-2 backdrop-blur">
             {camOn ? "Point to reveal · pinch a node to grab it, pinch space to turn · open palm to orbit · two hands to zoom" : "Drag to orbit · scroll to zoom · click a node · or turn on your camera and use your hands"}
             <br />Voice: “show me the risks” · “focus on Kevin Tran” · “zoom in” · “rotate left” · “step inside” · “reset” · or ask anything
           </div>
