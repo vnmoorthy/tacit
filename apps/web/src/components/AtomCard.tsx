@@ -65,7 +65,7 @@ export function AtomCard({
               </Badge>
             )}
             {domainName && <span className="text-[11.5px] text-muted truncate">· {domainName}</span>}
-            <span className="ml-auto font-mono text-[10.5px] text-muted/80">{Math.round(atom.confidence * 100)}%</span>
+            <span title={`Extraction confidence: ${Math.round(atom.confidence * 100)}%`} aria-label={`Extraction confidence: ${Math.round(atom.confidence * 100)}%`} className="ml-auto font-mono text-[10.5px] text-muted">{Math.round(atom.confidence * 100)}%</span>
           </div>
           <h4 className={cx("font-display mt-2 leading-snug", compact ? "text-[15px]" : "text-[17px]")}>{atom.title}</h4>
           {!compact && (
@@ -89,23 +89,26 @@ export function AtomCard({
         </div>
       </div>
       {(onVerify || onDelete || onEdit) && (
-        <div className="absolute right-3 top-3 hidden items-center gap-1 rounded-full border border-line-2 bg-paper-3 px-1 py-0.5 shadow-soft group-hover:flex">
+        <div className="mt-3 flex items-center justify-end gap-1 border-t border-line pt-2" aria-label={`Actions for ${atom.title}`}>
           {onVerify && (
             <button
-              title={atom.verified ? "Unverify" : "Mark verified by expert"}
+              type="button"
+              title={atom.verified ? "Remove verification" : "Mark as verified"}
+              aria-label={`${atom.verified ? "Remove verification from" : "Mark as verified:"} ${atom.title}`}
+              aria-pressed={atom.verified}
               onClick={() => onVerify(atom, !atom.verified)}
-              className={cx("rounded-full p-1.5 hover:bg-sage-2", atom.verified ? "text-sage" : "text-muted")}
+              className={cx("rounded-full p-2 hover:bg-sage-2", atom.verified ? "text-sage" : "text-muted")}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
             </button>
           )}
           {onEdit && (
-            <button title="Edit" onClick={() => onEdit(atom)} className="rounded-full p-1.5 text-muted hover:bg-paper-2 hover:text-ink">
+            <button type="button" title="Edit" aria-label={`Edit ${atom.title}`} onClick={() => onEdit(atom)} className="rounded-full p-2 text-muted hover:bg-paper-3 hover:text-ink">
               <Pencil className="h-3.5 w-3.5" />
             </button>
           )}
           {onDelete && (
-            <button title="Delete" onClick={() => onDelete(atom)} className="rounded-full p-1.5 text-muted hover:bg-danger-2 hover:text-danger">
+            <button type="button" title="Delete" aria-label={`Delete ${atom.title}`} onClick={() => onDelete(atom)} className="rounded-full p-2 text-muted hover:bg-danger-2 hover:text-danger">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}

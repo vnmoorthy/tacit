@@ -14,7 +14,8 @@
     "start": "pnpm --filter @tacit/api run start",
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck",
-    "seed": "pnpm --filter @tacit/api run seed"
+    "seed": "pnpm --filter @tacit/api run seed",
+    "test:demo": "node scripts/demo-smoke.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

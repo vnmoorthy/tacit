@@ -44,6 +44,7 @@ body,
 }
 
 body {
+  color-scheme: dark;
   background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
@@ -219,6 +220,20 @@ body {
 }
 .rise-in {
   animation: rise-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.tacit-dialog::backdrop {
+  background: rgb(0 0 0 / 65%);
+  backdrop-filter: blur(5px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @media (max-width: 640px) {

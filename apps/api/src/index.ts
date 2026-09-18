@@ -1,9 +1,7 @@
 import { serve } from "@hono/node-server";
-import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Engine } from "@tacit/core";
@@ -11,6 +9,7 @@ import { env, loadEnv } from "./env.js";
 import { resolveProviders } from "./providers.js";
 import { buildRoutes } from "./routes.js";
 import { SqliteStore } from "./sqlite.js";
+import { serveWeb } from "./web.js";
 
 loadEnv();
 
@@ -36,11 +35,7 @@ export async function createApp() {
   app.route("/api", buildRoutes(engine, { version: VERSION, notes: providers.notes, provider: providers.provider }));
 
   // Production: serve the built web app with SPA fallback.
-  if (existsSync(WEB_DIST)) {
-    app.use("/*", serveStatic({ root: WEB_DIST.replace(process.cwd() + "/", "").replace(/^\/+/, "") || WEB_DIST }));
-    const indexHtml = readFileSync(resolve(WEB_DIST, "index.html"), "utf8");
-    app.get("*", (c) => c.html(indexHtml));
-  } else {
+  if (!serveWeb(app, WEB_DIST)) {
     app.get("/", (c) => c.text(`Tacit API ${VERSION} — web build not found. Run \`pnpm build\` or use the Vite dev server.`));
   }
   return { app, engine, providers };

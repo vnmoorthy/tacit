@@ -515,7 +515,7 @@ export function Graph() {
     setModeSafe(h.fist ? "hold" : "none");
   };
 
-  const toggleCamera = async () => {
+  const toggleCamera = async (opts: { silent?: boolean } = {}) => {
     if (camOn) {
       exitImmersive();
       tracker.current?.stop();
@@ -526,7 +526,7 @@ export function Graph() {
       return;
     }
     if (!HandTracker.supported()) {
-      toast("Camera hand tracking isn't available in this browser.", "error");
+      if (!opts.silent) toast("Camera hand tracking isn't available in this browser.", "error");
       return;
     }
     try {
@@ -537,10 +537,13 @@ export function Graph() {
       setModeSafe("none");
       if (immersive) await enterImmersive();
     } catch (e) {
-      toast(`Camera: ${(e as Error).message}`, "error");
+      // A denied or missing camera is normal: fall back quietly to mouse + voice.
+      if (opts.silent) say("Camera unavailable — mouse, keyboard and voice still work");
+      else toast(`Camera: ${(e as Error).message}`, "error");
       tracker.current = null;
       setCamOn(false);
       setModeSafe("off");
+      setCamStatus("");
     }
   };
 
@@ -774,7 +777,7 @@ export function Graph() {
     if (!ready || autoStarted.current || !HandTracker.supported()) return;
     autoStarted.current = true;
     const t = setTimeout(() => {
-      if (!tracker.current) void toggleCamera();
+      if (!tracker.current) void toggleCamera({ silent: true });
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

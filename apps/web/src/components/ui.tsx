@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useApp } from "../lib/store.js";
 
@@ -11,6 +12,19 @@ export function cx(...parts: (string | false | null | undefined)[]): string {
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "accent";
 type Size = "sm" | "md" | "lg";
 
+/** Shared styling for semantic buttons and single-focus navigation links. */
+export function buttonClass({ variant = "secondary", size = "md", className }: { variant?: Variant; size?: Size; className?: string } = {}) {
+  const sizes: Record<Size, string> = { sm: "h-8 px-3 text-[13px]", md: "h-10 px-4 text-sm", lg: "h-12 px-6 text-[15px]" };
+  const variants: Record<Variant, string> = {
+    primary: "bg-ink text-paper hover:bg-white shadow-soft",
+    accent: "bg-accent text-[#0e1013] hover:bg-accent-2 shadow-soft",
+    secondary: "bg-paper-2 border border-line-2 text-ink hover:bg-paper-3 hover:border-muted",
+    ghost: "text-ink-2 border border-transparent hover:border-line-2 hover:bg-paper-2 hover:text-ink",
+    danger: "bg-danger-2 text-danger border border-danger/30 hover:bg-danger hover:text-white",
+  };
+  return cx("inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-150 select-none disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50", sizes[size], variants[variant], className);
+}
+
 export function Button({
   variant = "secondary",
   size = "md",
@@ -20,17 +34,8 @@ export function Button({
   children,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size; icon?: ReactNode; loading?: boolean }) {
-  const base = "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-150 select-none disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
-  const sizes: Record<Size, string> = { sm: "h-8 px-3 text-[13px]", md: "h-10 px-4 text-sm", lg: "h-12 px-6 text-[15px]" };
-  const variants: Record<Variant, string> = {
-    primary: "bg-ink text-paper hover:bg-white shadow-soft",
-    accent: "bg-accent text-[#0e1013] hover:bg-accent-2 shadow-soft",
-    secondary: "bg-paper-2 border border-line-2 text-ink hover:bg-paper-3 hover:border-muted",
-    ghost: "text-ink-2 border border-transparent hover:border-line-2 hover:bg-paper-2 hover:text-ink",
-    danger: "bg-danger-2 text-danger border border-danger/30 hover:bg-danger hover:text-white",
-  };
   return (
-    <button className={cx(base, sizes[size], variants[variant], className)} disabled={loading || props.disabled} {...props}>
+    <button type="button" {...props} className={buttonClass({ variant, size, className })} disabled={loading || props.disabled} aria-busy={loading || undefined}>
       {loading ? <Spinner className="h-4 w-4" /> : icon}
       {children}
     </button>
@@ -38,7 +43,7 @@ export function Button({
 }
 
 export function Spinner({ className }: { className?: string }) {
-  return <span className={cx("inline-block rounded-full border-2 border-current border-t-transparent animate-spin", className ?? "h-4 w-4")} />;
+  return <span aria-hidden="true" className={cx("inline-block rounded-full border-2 border-current border-t-transparent animate-spin", className ?? "h-4 w-4")} />;
 }
 
 /* ────────────────────────────── Badge ────────────────────────────── */
@@ -48,7 +53,7 @@ export type Tone = "neutral" | "accent" | "sage" | "danger" | "info" | "amber" |
 const TONES: Record<Tone, string> = {
   neutral: "bg-paper-2 text-ink-2 border-line",
   accent: "bg-accent-3 text-accent border-accent/20",
-  amber: "bg-accent-3 text-[#8a4a12] border-accent-2/60",
+  amber: "bg-accent-3 text-accent border-accent-2/60",
   sage: "bg-sage-2 text-sage border-sage/20",
   danger: "bg-danger-2 text-danger border-danger/20",
   info: "bg-info-2 text-info border-info/20",
@@ -124,7 +129,7 @@ export function EmptyState({ icon, title, body, action }: { icon?: ReactNode; ti
       {icon && <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-paper-2 text-ink-2">{icon}</div>}
       <h3 className="font-display text-xl">{title}</h3>
       {body && <p className="text-sm text-muted mt-1 max-w-md mx-auto">{body}</p>}
-      {action && <div className="mt-5 flex justify-center gap-2">{action}</div>}
+      {action && <div className="mt-5 flex flex-wrap justify-center gap-2">{action}</div>}
     </div>
   );
 }
@@ -170,22 +175,44 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 
 /* ────────────────────────────── Modal ────────────────────────────── */
 
-export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+export function Modal({ open, onClose, title, children, footer, wide, returnFocusId }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean; returnFocusId?: string }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    if (!open || !dialog.current) return;
+    const element = dialog.current;
+    const previous = returnFocusId ? document.getElementById(returnFocusId) : document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    element.showModal();
+    document.body.style.overflow = "hidden";
+    // Destructive dialogs mark Cancel; editors focus their first input.
+    const first = element.querySelector<HTMLElement>("[data-autofocus], [autofocus], input:not([disabled]), textarea:not([disabled]), select:not([disabled])")
+      ?? element.querySelector<HTMLElement>("button:not([disabled])");
+    first?.focus();
+    return () => {
+      element.close();
+      document.body.style.overflow = previousOverflow;
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
+  }, [open, returnFocusId]);
   if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
-      <div className={cx("relative w-full rounded-2xl bg-paper shadow-lift border border-line rise-in", wide ? "max-w-3xl" : "max-w-lg")}>
+  return createPortal(
+    <dialog ref={dialog} aria-labelledby={titleId} aria-modal="true" className={cx("tacit-dialog m-auto w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-paper text-ink shadow-lift border border-line rise-in", wide ? "max-w-3xl" : "max-w-lg")}
+      onCancel={(e) => { e.preventDefault(); onClose(); }}
+      onClick={(e) => {
+        if (e.target !== e.currentTarget) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) onClose();
+      }}>
         <div className="flex items-center justify-between px-6 pt-5 pb-3">
-          <h3 className="font-display text-xl">{title}</h3>
-          <button className="rounded-full p-1.5 text-muted hover:bg-paper-2 hover:text-ink" onClick={onClose} aria-label="Close">
+          <h3 id={titleId} className="font-display text-xl">{title}</h3>
+          <button type="button" className="rounded-full p-2 text-muted hover:bg-paper-2 hover:text-ink" onClick={onClose} aria-label="Close dialog">
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="px-6 pb-5">{children}</div>
         {footer && <div className="flex justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>}
-      </div>
-    </div>
+    </dialog>, document.body,
   );
 }
 
@@ -194,7 +221,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
 export function Toaster() {
   const { toasts, dismiss } = useApp();
   return (
-    <div className="pointer-events-none fixed bottom-5 right-5 z-[60] flex flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-5 right-5 left-5 sm:left-auto z-[60] flex flex-col gap-2" aria-label="Notifications">
       {toasts.map((t) => (
         <div
           key={t.id}
@@ -203,8 +230,8 @@ export function Toaster() {
             t.kind === "error" ? "bg-danger-2 border-danger/30 text-danger" : t.kind === "success" ? "bg-sage-2 border-sage/30 text-sage" : "bg-paper-3 text-ink border-line-2",
           )}
         >
-          <span className="flex-1">{t.text}</span>
-          <button onClick={() => dismiss(t.id)} className="opacity-70 hover:opacity-100">
+          <span className="flex-1" role={t.kind === "error" ? "alert" : "status"}>{t.text}</span>
+          <button type="button" aria-label="Dismiss notification" onClick={() => dismiss(t.id)} className="opacity-70 hover:opacity-100">
             <X className="h-4 w-4" />
           </button>
         </div>

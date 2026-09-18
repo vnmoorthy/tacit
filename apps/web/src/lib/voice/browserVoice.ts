@@ -1,11 +1,6 @@
-/**
- * Browser voice engine: Web Speech API recognition for the expert,
- * speechSynthesis for the interviewer. No keys, works in Chrome/Edge/Safari.
- */
+/** Browser speech input and an offline-compatible speech synthesis fallback. */
 import { MicLevel } from "./mic.js";
 import type { VoiceEvents, VoiceState } from "./types.js";
-
-type SR = typeof window extends { SpeechRecognition: infer T } ? T : any;
 
 function getRecognitionCtor(): (new () => any) | null {
   const w = window as any;
@@ -18,12 +13,9 @@ export interface BrowserVoiceEvents extends VoiceEvents {
 }
 
 export class BrowserVoice {
-  static supported(): boolean {
-    return Boolean(getRecognitionCtor()) && "speechSynthesis" in window;
-  }
-  static recognitionSupported(): boolean {
-    return Boolean(getRecognitionCtor());
-  }
+  static supported(): boolean { return Boolean(getRecognitionCtor()) && "speechSynthesis" in window; }
+  static recognitionSupported(): boolean { return Boolean(getRecognitionCtor()); }
+  static synthesisSupported(): boolean { return "speechSynthesis" in window; }
 
   private rec: any = null;
   private mic = new MicLevel();
@@ -31,185 +23,170 @@ export class BrowserVoice {
   private state: VoiceState = "off";
   private buffer = "";
   private silenceTimer = 0;
+  private restartTimer = 0;
   private destroyed = false;
   private voice: SpeechSynthesisVoice | null = null;
-  private synthUnlocked = false;
+  private finishSpeech: (() => void) | null = null;
+  private lang: string;
+  private voicesChanged = () => this.pickVoice();
 
-  private lang = "en-US";
-
-  constructor(private ev: BrowserVoiceEvents, lang?: string) {
-    if (lang) this.lang = lang;
+  constructor(private ev: BrowserVoiceEvents, lang = "en-US") {
+    this.lang = lang;
+    this.pickVoice();
+    window.speechSynthesis?.addEventListener?.("voiceschanged", this.voicesChanged);
   }
 
-  private setState(s: VoiceState) {
-    this.state = s;
-    this.ev.onState(s);
+  private setState(state: VoiceState) {
+    if (this.destroyed && state !== "off") return;
+    this.state = state;
+    this.ev.onState(state);
   }
 
-  /** The microphone stream (available after init). */
-  get stream(): MediaStream | null {
-    return this.mic.stream;
-  }
+  get stream(): MediaStream | null { return this.mic.stream; }
 
   async init() {
-    await this.mic.start((l) => this.ev.onLevel(this.state === "listening" ? l : 0));
-    this.pickVoice();
-    window.speechSynthesis?.addEventListener?.("voiceschanged", () => this.pickVoice());
+    if (this.destroyed) throw new DOMException("Voice setup cancelled", "AbortError");
+    await this.mic.start((level) => this.ev.onLevel(this.state === "listening" ? level : 0));
+    if (this.destroyed) { this.mic.stop(); return; }
     this.setState("idle");
   }
 
   private pickVoice() {
     const voices = window.speechSynthesis?.getVoices?.() ?? [];
-    if (!voices.length) return;
-    const base = this.lang.split("-")[0].toLowerCase();
-    if (base !== "en") {
-      const exact = voices.filter((v) => v.lang.toLowerCase().replace("_", "-") === this.lang.toLowerCase());
-      const family = voices.filter((v) => v.lang.toLowerCase().startsWith(base));
-      const pool = exact.length ? exact : family;
-      this.voice = pool.find((v) => /Google|Natural|Premium|Enhanced/i.test(v.name)) ?? pool[0] ?? voices[0];
-      return;
-    }
-    const prefs = [/Google US English/i, /Samantha/i, /Karen/i, /Daniel/i, /Moira/i, /Microsoft (Aria|Jenny|Guy)/i, /en-US/i, /en-GB/i, /en/i];
-    for (const re of prefs) {
-      const v = voices.find((v) => re.test(v.name) || re.test(v.lang));
-      if (v) {
-        this.voice = v;
-        return;
-      }
-    }
-    this.voice = voices[0];
+    const lang = this.lang.toLowerCase().replace("_", "-");
+    const base = lang.split("-")[0];
+    const family = voices.filter((v) => v.lang.toLowerCase().replace("_", "-").startsWith(base));
+    const exact = family.filter((v) => v.lang.toLowerCase().replace("_", "-") === lang);
+    const pool = exact.length ? exact : family;
+    this.voice = pool.find((v) => /Natural|Premium|Enhanced|Google|Samantha/i.test(v.name)) ?? pool[0] ?? voices[0] ?? null;
   }
 
-  /** Begin (or resume) listening for the expert. Recognition auto-restarts until stopListening(). */
   listen() {
-    if (this.destroyed) return;
+    if (this.destroyed || this.state === "speaking" || this.state === "thinking") return;
     this.wantListening = true;
+    this.mic.setMuted(false);
     this.startRecognition();
   }
 
   private startRecognition() {
     const Ctor = getRecognitionCtor();
-    if (!Ctor || !this.wantListening) return;
-    if (this.rec) {
-      try {
-        this.rec.abort();
-      } catch {
-        /* ignore */
-      }
-    }
+    if (this.destroyed || !Ctor || !this.wantListening || this.rec) return;
     const rec = new Ctor();
     this.rec = rec;
+    const current = () => this.rec === rec && this.wantListening && !this.destroyed;
     rec.lang = this.lang;
     rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     this.buffer = "";
-    rec.onstart = () => this.setState("listening");
-    rec.onresult = (e: any) => {
+    rec.onstart = () => { if (current()) this.setState("listening"); };
+    rec.onresult = (event: any) => {
+      if (!current()) return;
       let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) this.buffer += (this.buffer ? " " : "") + r[0].transcript.trim();
-        else interim += r[0].transcript;
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) this.buffer += (this.buffer ? " " : "") + result[0].transcript.trim();
+        else interim += result[0].transcript;
       }
       this.ev.onPartial((this.buffer + " " + interim).trim());
-      // The expert paused for ~1.6s after a final chunk → treat as end of turn.
       window.clearTimeout(this.silenceTimer);
-      if (this.buffer) {
-        this.silenceTimer = window.setTimeout(() => this.commit(), 1600);
-      }
+      if (this.buffer && !interim.trim()) this.silenceTimer = window.setTimeout(() => { if (current()) this.commit(); }, 1600);
     };
-    rec.onerror = (e: any) => {
-      if (e.error === "no-speech" || e.error === "aborted") return;
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        this.wantListening = false;
-        this.ev.onError("Microphone permission was denied. Allow the mic and try again, or switch to typing.");
-        this.setState("off");
-        return;
-      }
-      if (e.error === "network") {
-        this.ev.onError("Speech recognition needs a network connection in this browser. You can type your answers instead.");
-      }
+    rec.onerror = (event: any) => {
+      if (!current() || event.error === "no-speech" || event.error === "aborted") return;
+      this.stopListening();
+      this.setState("idle");
+      const message = event.error === "not-allowed" || event.error === "service-not-allowed"
+        ? "Microphone permission was denied. Allow the mic and try again, or type your answer."
+        : event.error === "network"
+          ? "Speech recognition lost its connection. Type your answer or press the microphone to retry."
+          : "Speech recognition stopped. Type your answer or press the microphone to retry.";
+      this.ev.onError(message);
     };
     rec.onend = () => {
+      if (!current()) return;
+      this.rec = null;
       if (this.buffer) this.commit();
-      // Chrome ends recognition after silence; keep listening.
-      if (this.wantListening && !this.destroyed) setTimeout(() => this.wantListening && this.startRecognition(), 250);
+      if (this.wantListening) this.restartTimer = window.setTimeout(() => this.startRecognition(), 250);
     };
-    try {
-      rec.start();
-    } catch {
-      /* already started */
+    try { rec.start(); }
+    catch (error) {
+      this.rec = null;
+      this.wantListening = false;
+      this.setState("idle");
+      this.ev.onError((error as Error).message || "Could not start speech recognition. Try again or type your answer.");
     }
   }
 
   private commit() {
-    window.clearTimeout(this.silenceTimer);
     const text = this.buffer.trim();
-    this.buffer = "";
-    if (!text) return;
     this.stopListening();
-    this.ev.onPartial("");
-    this.ev.onFinal(text);
+    if (text && !this.destroyed) this.ev.onFinal(text);
   }
 
   stopListening() {
     this.wantListening = false;
+    this.buffer = "";
     window.clearTimeout(this.silenceTimer);
+    window.clearTimeout(this.restartTimer);
+    this.mic.setMuted(true);
     if (this.rec) {
-      const r = this.rec;
+      const rec = this.rec;
       this.rec = null;
-      r.onend = null;
-      try {
-        r.abort();
-      } catch {
-        /* ignore */
-      }
+      rec.onend = rec.onresult = rec.onerror = rec.onstart = null;
+      try { rec.abort(); } catch { /* already stopped */ }
     }
+    this.ev.onPartial("");
+    this.ev.onLevel(0);
     if (this.state === "listening") this.setState("idle");
   }
 
-  thinking() {
-    this.stopListening();
-    this.setState("thinking");
-  }
+  thinking() { this.stopListening(); this.stopSpeaking(); this.setState("thinking"); }
+  idle() { this.setState("idle"); }
 
-  /** Speak a line; resolves when done (or immediately if synthesis is unavailable). */
+  /** Does not require microphone permission. Cancellation always settles the promise. */
   speak(text: string): Promise<void> {
-    return new Promise((resolve) => {
-      const synth = window.speechSynthesis;
-      if (!synth) return resolve();
-      this.stopListening();
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      if (this.voice) u.voice = this.voice;
-      u.rate = 1.02;
-      u.pitch = 1.0;
+    if (this.destroyed) return Promise.resolve();
+    const synth = window.speechSynthesis;
+    if (!synth) return Promise.reject(new Error("Spoken playback is not supported in this browser."));
+    this.stopListening();
+    this.stopSpeaking();
+    this.pickVoice();
+    return new Promise((resolve, reject) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = this.lang;
+      if (this.voice) utterance.voice = this.voice;
+      utterance.rate = 1;
       let done = false;
-      const finish = () => {
+      const finish = (error?: Error) => {
         if (done) return;
         done = true;
-        window.clearInterval(watchdog);
+        clearTimeout(watchdog);
+        utterance.onstart = utterance.onend = utterance.onerror = null;
+        if (this.finishSpeech === cancel) this.finishSpeech = null;
         if (this.state === "speaking") this.setState("idle");
-        resolve();
+        if (error) reject(error); else resolve();
       };
-      u.onstart = () => this.setState("speaking");
-      u.onend = finish;
-      u.onerror = finish;
-      // Some browsers never fire onend for cancelled/long utterances — watchdog.
-      const est = 2000 + text.split(/\s+/).length * 420;
-      const started = Date.now();
-      const watchdog = window.setInterval(() => {
-        if (!synth.speaking || Date.now() - started > est + 4000) finish();
-      }, 400);
-      this.synthUnlocked = true;
-      synth.speak(u);
+      const cancel = () => finish();
+      this.finishSpeech = cancel;
+      const watchdog = setTimeout(() => {
+        finish(new Error("Spoken playback timed out. Press Replay to try again."));
+        synth.cancel();
+      }, Math.max(15000, text.split(/\s+/).length * 700 + 5000));
+      this.setState("speaking");
+      utterance.onend = () => finish();
+      utterance.onerror = (event) => finish(event.error === "canceled" || event.error === "interrupted" ? undefined : new Error(`Browser voice failed (${event.error}). Press Replay to try again.`));
+      try { synth.resume(); synth.speak(utterance); }
+      catch (error) { finish(error as Error); }
     });
   }
 
   stopSpeaking() {
-    window.speechSynthesis?.cancel();
-    if (this.state === "speaking") this.setState("idle");
+    const finish = this.finishSpeech;
+    if (finish) {
+      finish();
+      window.speechSynthesis?.cancel();
+    }
   }
 
   destroy() {
@@ -217,6 +194,7 @@ export class BrowserVoice {
     this.stopListening();
     this.stopSpeaking();
     this.mic.stop();
+    window.speechSynthesis?.removeEventListener?.("voiceschanged", this.voicesChanged);
     this.setState("off");
   }
 }
