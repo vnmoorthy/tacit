@@ -36,6 +36,8 @@ export interface HiggsSessionInfo {
   voice: string;
   instructions: string;
   transcriptionModel: string;
+  language?: string;
+  transcriptionPrompt?: string;
 }
 
 export interface AtomFilter {

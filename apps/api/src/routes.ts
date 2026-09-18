@@ -140,7 +140,11 @@ export function buildRoutes(engine: Engine, meta: { version: string; notes: stri
     if (!apiKey) return c.json({ error: "BOSON_API_KEY is not configured on the server" }, 409);
     const { captureId } = await body(c, z.object({ captureId: z.string().min(1) }));
     const instructions = await engine.interviewerInstructions(captureId);
-    const session = await createHiggsSession({ apiKey, instructions, voice: env("BOSON_VOICE", "nora"), baseUrl: env("BOSON_BASE_URL") || undefined });
+    const capture = await engine.getCapture(captureId);
+    const atoms = await engine.listAtoms(captureId);
+    const vocab = [...new Set([capture.expert.name, capture.successor?.name, ...atoms.flatMap((a) => a.tags)].filter((x): x is string => Boolean(x) && /^[A-Z]/.test(x as string)))].slice(0, 24);
+    const transcriptionPrompt = `${capture.expert.role} interview. Names and systems: ${vocab.join(", ")}.`;
+    const session = await createHiggsSession({ apiKey, instructions, voice: env("BOSON_VOICE", "nora"), baseUrl: env("BOSON_BASE_URL") || undefined, language: capture.expert.language, transcriptionPrompt });
     return c.json(session);
   });
 

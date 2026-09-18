@@ -9,9 +9,13 @@ export interface HiggsSession {
   voice: string;
   instructions: string;
   transcriptionModel: string;
+  /** ISO-639-1 language for speech-to-text (pinned to the interview language). */
+  language: string;
+  /** Vocabulary hint for speech-to-text: names, systems, terms. */
+  transcriptionPrompt: string;
 }
 
-export async function createHiggsSession(opts: { apiKey: string; instructions: string; voice: string; baseUrl?: string }): Promise<HiggsSession> {
+export async function createHiggsSession(opts: { apiKey: string; instructions: string; voice: string; baseUrl?: string; language?: string; transcriptionPrompt?: string }): Promise<HiggsSession> {
   const base = (opts.baseUrl ?? "https://api.boson.ai").replace(/\/$/, "");
   const res = await fetch(`${base}/v1/realtime/client_secrets`, {
     method: "POST",
@@ -34,6 +38,8 @@ export async function createHiggsSession(opts: { apiKey: string; instructions: s
     voice: opts.voice,
     instructions: opts.instructions,
     transcriptionModel: "higgs-stt-3.1",
+    language: (opts.language ?? "en").split("-")[0].toLowerCase(),
+    transcriptionPrompt: opts.transcriptionPrompt ?? "",
   };
 }
 

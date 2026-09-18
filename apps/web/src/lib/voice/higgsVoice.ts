@@ -75,6 +75,9 @@ export class HiggsVoice {
   private state: VoiceState = "off";
   private assistantBuf = "";
   private speakingTimer = 0;
+  private language = "en";
+  private noiseFloor = 0.004;
+  private gateOpenUntil = 0;
   private muted = false;
   private generation = 0;
   private cancelConnect: (() => void) | null = null;
@@ -95,6 +98,7 @@ export class HiggsVoice {
   }
 
   async connect(info: HiggsSessionInfo) {
+    this.language = (info.language ?? "en").split("-")[0].toLowerCase();
     this.disconnect();
     const generation = this.generation;
     const current = () => generation === this.generation;
@@ -143,7 +147,7 @@ export class HiggsVoice {
               model: info.model,
               instructions: info.instructions,
               audio: {
-                input: { format: { type: "audio/pcm", rate: RATE }, turn_detection: { type: "semantic_vad" }, transcription: { model: info.transcriptionModel } },
+                input: { format: { type: "audio/pcm", rate: RATE }, turn_detection: { type: "semantic_vad" }, transcription: { model: info.transcriptionModel, language: this.language, ...(info.transcriptionPrompt ? { prompt: info.transcriptionPrompt } : {}) } },
                 output: { format: { type: "audio/pcm", rate: RATE }, voice: info.voice },
               },
             },
@@ -173,9 +177,22 @@ export class HiggsVoice {
         if (!current() || this.muted || ws.readyState !== WebSocket.OPEN) return;
         const samples = event.data;
         let peak = 0;
-        for (let i = 0; i < samples.length; i += 8) peak = Math.max(peak, Math.abs(samples[i]));
+        let energy = 0;
+        for (let i = 0; i < samples.length; i += 4) {
+          const v = samples[i];
+          peak = Math.max(peak, Math.abs(v));
+          energy += v * v;
+        }
+        const rms = Math.sqrt(energy / Math.max(1, samples.length / 4));
         if (this.state === "listening" || this.state === "idle") this.ev.onLevel(Math.min(1, peak * 3));
-        const pcm = downsample(samples, ctx.sampleRate, RATE);
+        // Noise gate: keyboard taps, breaths and room hum never reach the model. The floor adapts to
+        // the quietest recent frames; speech opens the gate and holds it for a short hangover.
+        const now = performance.now();
+        if (rms < this.noiseFloor * 1.5) this.noiseFloor = this.noiseFloor * 0.98 + rms * 0.02;
+        const threshold = Math.max(0.012, this.noiseFloor * 3.5);
+        if (rms > threshold) this.gateOpenUntil = now + 700;
+        const open = now < this.gateOpenUntil;
+        const pcm = downsample(open ? samples : new Float32Array(samples.length), ctx.sampleRate, RATE);
         this.send({ type: "input_audio_buffer.append", audio: b64(new Uint8Array(pcm.buffer)) });
       };
       this.setState(this.muted ? "idle" : "listening");
@@ -223,9 +240,22 @@ export class HiggsVoice {
   }
 
   /** Preserve a completed thought once, including when the user ends/disconnects. */
+  /** Drop transcripts that are noise artefacts: wrong script for the interview language, lone interjections, fragments. */
+  private meaningful(text: string): boolean {
+    const t = text.trim();
+    const latin = !["zh", "ja", "ko", "hi", "ta", "te", "ar", "th", "he", "ru", "uk", "el", "bn", "kn", "ml", "mr", "gu", "pa", "ur", "fa"].includes(this.language);
+    if (latin) {
+      if (!/[A-Za-zÀ-ÿ]/.test(t)) return false;
+      const words = t.replace(/[^A-Za-zÀ-ÿ'’ -]/g, " ").trim().split(/\s+/).filter(Boolean);
+      if (!words.length) return false;
+      return !words.every((w) => /^(um+|uh+|hmm+|mm+|ah+|oh+|huh|er+|erm)$/i.test(w));
+    }
+    return t.replace(/[\s\p{P}]/gu, "").length >= 2;
+  }
+
   flushTranscripts() {
     for (const [key, text] of this.pendingUsers) {
-      if (!this.userItems.has(key)) this.ev.onUserTranscript(text);
+      if (!this.userItems.has(key) && this.meaningful(text)) this.ev.onUserTranscript(text);
       this.userItems.set(key, text);
     }
     this.pendingUsers.clear();
