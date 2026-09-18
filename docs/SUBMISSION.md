@@ -10,11 +10,11 @@ Form: https://forms.gle/c5BFUZTttRN7NHT79 (Boson Higgs Audio Hackathon 2026). Al
 
 **Team:** Moorthy (GitHub: vnmoorthy)
 
-**Public repo:** https://github.com/vnmoorthy/tacit — tagged release: `v0.1.0-hackathon` (commit SHA in the release notes)
+**Public repo:** https://github.com/vnmoorthy/tacit — tagged release: https://github.com/vnmoorthy/tacit/releases/tag/v0.1.0-hackathon · commit `3add3f7df79652e79f89358edae416a66eac3fcb`
 
 **Live demo (optional):** https://vnmoorthy.github.io/tacit/ (standalone mode: offline brain + browser voice; the Higgs voice path runs on the local server with a Boson key)
 
-**Demo video (2–3 min, public link):** `docs/assets/tacit-demo.mp4` in the repo → https://github.com/vnmoorthy/tacit/raw/main/docs/assets/tacit-demo.mp4 (replace with a YouTube/Drive link if you upload one)
+**Demo video (2–3 min, public link):** https://github.com/vnmoorthy/tacit/releases/download/v0.1.0-hackathon/tacit-demo.mp4 (release asset; also in the repo at docs/assets/tacit-demo.mp4; replace with a YouTube link if you upload one)
 
 ## Write-up
 
