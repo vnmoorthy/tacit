@@ -61,7 +61,7 @@ try {
     await go("/new");
     await page.getByLabel("Name", { exact: true }).first().fill("Avery Demo");
     await page.getByLabel("Role", { exact: true }).first().fill("Payroll Specialist");
-    await page.getByLabel("Name", { exact: true }).nth(1).fill("Sam Demo");
+    await page.getByPlaceholder("Jordan Reyes", { exact: true }).fill("Sam Demo");
     await page.getByLabel("What does this role own?").fill("Owns payroll, ACH funding and Workday reconciliation for a small operations team.");
     await page.getByRole("button", { name: /^(Plan the capture|Create capture)$/ }).click();
     await page.waitForURL(/\/c\/[^/]+$/);
@@ -73,12 +73,12 @@ try {
     await go(`/c/${captureId}/interview`);
     await page.getByRole("button", { name: /Type answers/ }).click();
     await page.getByRole("button", { name: /^(Begin session|Start interview)$/ }).click();
-    const input = page.locator("textarea,input[placeholder*='type'],input[placeholder*='answer']").last();
+    const input = page.getByRole("textbox").last();
     await input.fill("The real ACH cut-off is 3:30pm, not 5pm. First call the Treasury desk if the file is rejected, then correct the record in Workday. Never resend a file until Treasury confirms the old file is cancelled.");
     await input.press("Enter");
     await waitText("The real ACH cut-off is 3:30pm");
     await page.getByRole("button", { name: /^(End session|End interview)$/ }).click();
-    await waitText("Session complete");
+    await waitText("Session captured");
     await screenshot("interview-complete");
   });
 
@@ -87,7 +87,7 @@ try {
     await page.locator("article").first().waitFor();
     await page.reload();
     await page.locator("article").first().waitFor();
-    const edit = page.getByRole("button", { name: /^Edit( atom)?$/ }).first();
+    const edit = page.getByRole("button", { name: /^Edit\b/ }).first();
     await edit.focus();
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog");
@@ -122,12 +122,12 @@ try {
     await page.getByRole("button", { name: /Type answers/ }).click();
     await page.getByRole("button", { name: /^(Begin session|Start interview)$/ }).click();
     await waitText("forklift certification");
-    const answer = page.locator("textarea,input[placeholder*='type'],input[placeholder*='answer']").last();
+    const answer = page.getByRole("textbox").last();
     await answer.fill("First call Ramon in Facilities, then book the practical assessment with the approved training vendor before the card expires. Ramon keeps the renewal dates in the training register.");
     await answer.press("Enter");
     await waitText("Ramon keeps the renewal dates");
     await page.getByRole("button", { name: /^(End session|End interview)$/ }).click();
-    await waitText("Session complete");
+    await waitText("Session captured");
     await go(`/c/${captureId}/handover`);
     await waitText("Ramon");
     assert.match(await page.locator("main").innerText(), /3:30/);
@@ -148,6 +148,10 @@ try {
     await page.locator("canvas").first().waitFor();
     await page.waitForTimeout(1000);
     assert.equal(cameraRequested, false, "Camera should open only after an explicit action");
+    await page.getByLabel("Ask a question", { exact: true }).fill("What is the ACH cut-off time?");
+    await page.getByRole("button", { name: "Ask", exact: true }).click();
+    await waitText("3:30");
+    await page.waitForTimeout(700);
     await screenshot("constellation");
   });
 

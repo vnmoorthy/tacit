@@ -50,7 +50,7 @@ const CAPTURE_TABS = (id: string) => [
   { to: `/c/${id}`, icon: <Sparkles className="h-4 w-4" />, label: "Overview", end: true },
   { to: `/c/${id}/interview`, icon: <Mic className="h-4 w-4" />, label: "Interview" },
   { to: `/c/${id}/knowledge`, icon: <Brain className="h-4 w-4" />, label: "Knowledge" },
-  { to: `/c/${id}/ask`, icon: <MessageSquareText className="h-4 w-4" />, label: "Ask" },
+  { to: `/c/${id}/ask`, icon: <MessageSquareText className="h-4 w-4" />, label: "Ask the twin" },
   { to: `/c/${id}/graph`, icon: <Orbit className="h-4 w-4" />, label: "Constellation" },
   { to: `/c/${id}/handover`, icon: <FileText className="h-4 w-4" />, label: "Handover" },
 ];
@@ -78,6 +78,7 @@ export function Layout() {
   return (
     <div className="flex min-h-screen">
       {/* ── desktop sidebar ── */}
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-paper">Skip to content</a>
       <aside className="sticky top-0 hidden h-screen w-[256px] shrink-0 flex-col border-r border-line bg-paper px-4 py-5 md:flex">
         <Link to="/app" className="flex items-center gap-2.5 px-2">
           <span className="grid h-9 w-9 place-items-center rounded-lg border border-line-2 bg-paper-2">
@@ -90,7 +91,7 @@ export function Layout() {
           <span className="font-display text-[22px] leading-none">Tacit</span>
         </Link>
 
-        <nav className="mt-7 space-y-1">
+        <nav aria-label="Main navigation" className="mt-7 space-y-1">
           <NavItem to="/app" icon={<LayoutGrid className="h-4 w-4" />} label="Captures" end />
           <NavItem to="/new" icon={<Plus className="h-4 w-4" />} label="New capture" />
         </nav>
@@ -104,7 +105,7 @@ export function Layout() {
                 <div className="truncate text-[11.5px] text-muted">{capture?.expert.role ?? ""}</div>
               </div>
             </div>
-            <nav className="mt-3 space-y-1">
+            <nav aria-label="Capture navigation" className="mt-3 space-y-1">
               {tabs.map((t) => (
                 <NavItem key={t.to} {...t} />
               ))}
@@ -139,13 +140,13 @@ export function Layout() {
             </Link>
           </div>
         </div>
-        <div className="mx-auto max-w-[1180px] px-5 py-7 md:px-8 md:py-9">
+        <div id="main-content" tabIndex={-1} className="mx-auto max-w-[1180px] px-5 py-7 md:px-8 md:py-9">
           <Outlet />
         </div>
       </main>
 
       {/* ── mobile bottom tabs ── */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-paper/95 backdrop-blur md:hidden">
+      <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-paper/95 backdrop-blur md:hidden">
         {(captureId
           ? tabs.filter((t) => t.label !== "Handover")
           : [
@@ -158,10 +159,11 @@ export function Layout() {
             key={t.to}
             to={t.to}
             end={t.end}
+            aria-label={t.label}
             className={({ isActive }) => cx("flex flex-1 flex-col items-center gap-1 py-2.5 text-[10.5px] font-medium", isActive ? "text-accent" : "text-muted")}
           >
             {t.icon}
-            {t.label}
+            {t.label === "Ask the twin" ? "Ask" : t.label}
           </NavLink>
         ))}
       </nav>

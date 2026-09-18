@@ -68,18 +68,18 @@ Companies know this. Fortune 500s lose an estimated **$31.5B a year** from faili
 
 ### Features
 
-- **Real-time voice interviews** on Boson AI's **Higgs Realtime** (speech-to-speech, semantic turn detection, barge-in), with a zero-key **browser voice** fallback and a **type** mode. The demo can't die on stage.
+- **Real-time voice interviews** on Boson AI's **Higgs Realtime** (speech-to-speech, semantic turn detection, barge-in), with browser voice where supported and a **type** mode. Reconnect voice or continue typing in the same saved interview if audio fails.
 - **Live extraction** of typed, cited knowledge atoms while the expert is still talking.
 - **Coverage map**: planned domains × target questions; the interviewer steers to what's missing.
 - **The successor twin**: hybrid retrieval (BM25 + embeddings, RRF-fused), grounded answers with `[n]` citations, confidence gating.
 - **The closed loop**: unanswered successor questions are queued and asked first next session.
-- **Voice cloning**: with the expert's consent, Higgs Audio clones their voice from the interview so the twin speaks like them.
+- **Voice cloning**: with the expert's consent and reference recording enabled, Higgs Audio can clone their voice so the twin speaks like them. Otherwise the twin uses a stock voice, with browser speech as fallback.
 - **Multilingual interviews**: the expert is interviewed in their own language (Spanish, Tamil, Mandarin, 18 presets, Higgs supports 100+) while every atom is written in English with the verbatim quote preserved.
 - **Phone interviews**: Tacit calls the expert (Twilio SIP → LiveKit → Higgs Realtime agent). See [docs/PHONE.md](docs/PHONE.md).
 - **Handover document** compiled from everything captured (Markdown → Confluence/Notion/PDF).
 - **The Constellation**: a 3D knowledge graph of atoms, domains and the people and systems they mention, with bloom and particle flows. Steer it with your hands through the camera (point to reveal, pinch to grab, open palm to orbit, two hands to zoom; on-device MediaPipe hand tracking), step *inside* it with your live camera as the backdrop, and ask it questions by voice: the cited atoms light up while the camera flies to them.
 - **Runs anywhere**: any OpenAI-compatible LLM (Nebius first-class), Anthropic, local Ollama, or an offline demo brain. The same engine runs fully in the browser, so the [live demo](https://vnmoorthy.github.io/tacit/) works with no backend at all.
-- **Zero native dependencies**: Node's built-in SQLite, one Docker image, 19 tests.
+- **Zero native runtime dependencies**: Node's built-in SQLite and one Docker image. Unit tests and repeatable browser checks cover persistence, voice lifecycle, gestures and the demo journey.
 
 ## Who it's for
 
@@ -95,7 +95,7 @@ Companies know this. Fortune 500s lose an estimated **$31.5B a year** from faili
 | **Founders and family businesses** | Judgement calls, relationships and handshake deals captured before succession or acquisition. |
 | **Family memory** | Interview a grandparent: recipes, stories and sayings, answered in their own voice. |
 
-Role templates for payroll/finance, engineering/SRE, operations/manufacturing, sales, HR, clinical care, open-source maintainers, founders/executives and family memory drive the offline planner; the LLM planner adapts to any role.
+Role templates for payroll/finance, engineering/SRE, operations/manufacturing, sales, HR, clinical care, clinical nursing, utilities/field service, hospitality management, public-sector casework, research labs, open-source maintainers, founders/executives and family memory drive the offline planner; the LLM planner adapts to any role.
 
 ## Quickstart
 
@@ -105,7 +105,7 @@ pnpm install
 pnpm dev          # API on http://localhost:8787, web on http://localhost:5173
 ```
 
-That's it. With no keys Tacit runs the offline demo brain and your browser's speech APIs. Click **Load sample captures** on the dashboard to meet Maria (payroll) and Dev (SRE).
+That's it. With no keys Tacit runs the offline demo brain and your browser's speech APIs where supported. Click **Load sample captures** on the dashboard to meet Maria (payroll), Dev (SRE) and Luis (plant maintenance).
 
 To make it *good*, add keys to a `.env` at the repo root (see [`.env.example`](.env.example)):
 
@@ -118,9 +118,11 @@ If [Ollama](https://ollama.com) is running locally it's auto-detected (`llama3.1
 
 ```bash
 pnpm seed         # load sample captures into SQLite
-pnpm test         # 19 tests across core + api
+pnpm test         # core, API, voice, gestures and persistence tests
 pnpm build        # production web build (served by the API)
 ```
+
+For client demos, build first and run `pnpm start` at http://localhost:8787 so source edits cannot interrupt the presentation. See [demo readiness and verification](docs/DEMO_READINESS.md) for browser checks, live-provider validation and device rehearsal.
 
 ## How it works
 
@@ -151,7 +153,7 @@ Two interchangeable brains implement the same interface:
 | Engine | Path | When |
 |---|---|---|
 | **Higgs Realtime** | Browser ⇄ `wss://api.boson.ai/v1/realtime` (ephemeral `bai-client-secret`, PCM16 @ 24 kHz, OpenAI Realtime events). User transcripts via `higgs-stt-3.1` → `/sessions/:id/turns` for extraction; the agenda is refreshed with `session.update` after every answer. | `BOSON_API_KEY` set |
-| **Browser voice** | Web Speech recognition (1.6 s end-of-turn) → API → `speechSynthesis`. | Always available in Chrome/Edge/Safari |
+| **Browser voice** | Web Speech recognition (1.6 s end-of-turn) → API → `speechSynthesis`. | When supported and microphone permission is granted; text input remains available |
 | **Higgs Audio** | `/v1/audio/speech` for the twin's spoken answers; `/v1/audio/voices` clones the expert from a reference clip recorded during a browser-voice session. | `BOSON_API_KEY` set |
 | **Phone** | Twilio SIP trunk → LiveKit room → `services/phone-agent` (LiveKit Agents) on Higgs Realtime → Tacit API. | LiveKit + Twilio configured |
 
@@ -163,7 +165,7 @@ Two interchangeable brains implement the same interface:
 |---|---|
 | Graph | `buildGraph()` in core: domain hubs, atom nodes coloured by type, entity nodes for people, tools and teams (from tags), `in` / `mentions` / `related` links (BM25 neighbours). Served at `GET /captures/:id/graph`; also built in-browser in standalone mode. |
 | Rendering | `3d-force-graph` + three.js, UnrealBloom post-processing, sprite labels, directional particles on highlighted links. |
-| Hands | `@mediapipe/tasks-vision` Hand Landmarker (WASM, on-device, two hands). Gestures are derived from landmark geometry and unit-tested. Fingertip → screen → nearest node; pinch fixes the node's position and reheats the simulation; pinching empty space or an open palm orbits the camera; inter-hand distance zooms. |
+| Hands | `@mediapipe/tasks-vision` Hand Landmarker (WASM, on-device, two hands), with model and WASM served locally. Camera starts only after **Use my hands**. Stable hand identities, pinch hysteresis and mirrored preview mapping keep pickup/orbit/zoom transitions predictable; lost hands release dragged nodes. |
 | Immersive | "Step inside": the mirrored camera feed becomes the scene background (three.js `VideoTexture`) under a camera-locked veil, with the hand skeleton drawn full-screen, so the presenter stands in the constellation. |
 | Voice | Continuous listening with a small command grammar: "show me the risks", "focus on Kevin Tran", "zoom in", "rotate left", "step inside", "reset". Anything else is a question for the twin: grounded answer, spoken back (Higgs Audio when available), cited atoms highlighted and framed. Listening pauses while the twin speaks. |
 | Record | One button records the constellation (with your camera backdrop when inside) from the WebGL canvas to a video file. |

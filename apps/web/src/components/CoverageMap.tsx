@@ -99,6 +99,7 @@ export function CoverageMap({
               <li key={d.id}>
                 <button
                   type="button"
+                  aria-pressed={isSel}
                   onClick={() => onSelect?.(isSel ? null : d.id)}
                   className={cx(
                     "w-full rounded-xl px-3 py-2 text-left transition",
@@ -109,7 +110,7 @@ export function CoverageMap({
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10.5px] text-muted w-4">{i + 1}</span>
                     <span className="text-[13.5px] font-medium truncate flex-1">{d.name}</span>
-                    <span className={cx("text-[10.5px] font-mono px-1.5 rounded", d.priority === 1 ? "bg-accent-3 text-accent" : "bg-paper-3 text-muted")}>P{d.priority}</span>
+                    <span title={d.priority === 1 ? "P1: Critical" : d.priority === 2 ? "P2: Important" : "P3: Nice to have"} aria-label={d.priority === 1 ? "Priority: Critical" : d.priority === 2 ? "Priority: Important" : "Priority: Nice to have"} className={cx("text-[10.5px] font-mono px-1.5 rounded", d.priority === 1 ? "bg-accent-3 text-accent" : "bg-paper-3 text-muted")}>P{d.priority}</span>
                     <span className="font-mono text-[12px] text-ink-2 w-10 text-right">{Math.round(d.coverage * 100)}%</span>
                   </div>
                   <div className="mt-1.5 ml-6 h-1 rounded-full bg-paper-3 overflow-hidden">

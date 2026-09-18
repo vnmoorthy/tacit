@@ -1,44 +1,51 @@
-/** Records the expert's microphone during a session so the twin can borrow their voice (Higgs Audio cloning). */
+/** Optional, explicitly permitted microphone recording for voice cloning. */
 export class ReferenceRecorder {
   private rec: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private startedAt = 0;
+  private stopping: Promise<Blob | null> | null = null;
   mimeType = "audio/webm";
 
-  static supported(): boolean {
-    return typeof MediaRecorder !== "undefined";
-  }
+  static supported(): boolean { return typeof MediaRecorder !== "undefined"; }
 
   start(stream: MediaStream) {
-    if (!ReferenceRecorder.supported()) return;
+    if (!ReferenceRecorder.supported() || this.rec || this.stopping) return;
     const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
-    this.mimeType = candidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
-    this.rec = new MediaRecorder(stream, this.mimeType ? { mimeType: this.mimeType, audioBitsPerSecond: 64000 } : undefined);
+    this.mimeType = candidates.find((mime) => MediaRecorder.isTypeSupported(mime)) ?? "";
+    const recorder = new MediaRecorder(stream, this.mimeType ? { mimeType: this.mimeType, audioBitsPerSecond: 64000 } : undefined);
+    this.rec = recorder;
     this.chunks = [];
-    this.rec.ondataavailable = (e) => e.data.size && this.chunks.push(e.data);
-    this.rec.start(1000);
+    recorder.ondataavailable = (event) => { if (event.data.size) this.chunks.push(event.data); };
+    recorder.start(1000);
     this.startedAt = Date.now();
   }
 
-  get seconds(): number {
-    return this.rec ? (Date.now() - this.startedAt) / 1000 : 0;
-  }
+  get seconds(): number { return this.rec ? (Date.now() - this.startedAt) / 1000 : 0; }
 
-  /** Stop and return the recording (or null if too short / unsupported). */
+  /** A failed recorder must never prevent the interview from ending. */
   stop(): Promise<Blob | null> {
-    return new Promise((resolve) => {
-      const rec = this.rec;
-      if (!rec) return resolve(null);
-      this.rec = null;
-      rec.onstop = () => {
-        const blob = new Blob(this.chunks, { type: this.mimeType || "audio/webm" });
-        resolve(blob.size > 20_000 ? blob : null);
+    if (this.stopping) return this.stopping;
+    const recorder = this.rec;
+    if (!recorder) return Promise.resolve(null);
+    const mimeType = this.mimeType;
+    this.stopping = new Promise<Blob | null>((resolve) => {
+      let settled = false;
+      const done = (usable: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        recorder.onstop = recorder.onerror = recorder.ondataavailable = null;
+        const blob = usable ? new Blob(this.chunks, { type: mimeType || "audio/webm" }) : null;
+        this.chunks = [];
+        this.rec = null;
+        resolve(blob && blob.size > 20_000 ? blob : null);
       };
-      try {
-        rec.stop();
-      } catch {
-        resolve(null);
-      }
-    });
+      const timeout = setTimeout(() => done(false), 2000);
+      recorder.onstop = () => done(true);
+      recorder.onerror = () => done(false);
+      try { if (recorder.state === "inactive") done(true); else recorder.stop(); }
+      catch { done(false); }
+    }).finally(() => { this.stopping = null; });
+    return this.stopping;
   }
 }

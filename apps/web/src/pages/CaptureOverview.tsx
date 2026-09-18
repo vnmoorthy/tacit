@@ -1,11 +1,12 @@
-import { AlertCircle, Clock, FileText, MessageSquareText, Mic, MoreHorizontal, Orbit, Phone, Plus, Trash2, Volume2 } from "lucide-react";
-import { BlobPlayer } from "../lib/voice/player.js";
-import { useCallback, useEffect, useState } from "react";
+import { AlertCircle, Clock, FileText, MessageSquareText, Mic, MoreHorizontal, Orbit, Phone, Plus, Square, Trash2, Volume2 } from "lucide-react";
+import { BrowserVoice } from "../lib/voice/browserVoice.js";
+import { SpokenAudio } from "../lib/voice/spokenAudio.js";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { languageName, type Atom, type Capture, type Question, type Session } from "@tacit/core";
 import { AtomCard } from "../components/AtomCard.js";
 import { CoverageMap } from "../components/CoverageMap.js";
-import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Input, Modal, SectionTitle, Stat, cx } from "../components/ui.js";
+import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Field, Input, Modal, SectionTitle, Stat, cx } from "../components/ui.js";
 import { daysUntil, fmtDate, fmtDuration, fmtRelative, pct, plural } from "../lib/format.js";
 import { useApi, useApp } from "../lib/store.js";
 
@@ -26,18 +27,30 @@ export function CaptureOverview() {
   const [callOpen, setCallOpen] = useState(false);
   const [phone, setPhone] = useState("");
   const [calling, setCalling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [addingQuestion, setAddingQuestion] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const previewAudio = useRef<SpokenAudio | null>(null);
+  const previewVersion = useRef(0);
   const health = useApp((s) => s.health);
 
+  useEffect(() => () => {
+    previewVersion.current++;
+    previewAudio.current?.destroy();
+    previewAudio.current = null;
+  }, []);
+
   const callExpert = async () => {
-    if (!capture) return;
+    if (!capture || calling) return;
     setCalling(true);
+    setModalError(null);
     try {
-      const r = await api.callExpert(id, phone.trim());
-      toast(`Calling ${capture.expert.name}… room ${r.roomName}`, "success");
+      await api.callExpert(id, phone.trim());
+      toast(`Calling ${capture.expert.name}…`, "success");
       setCallOpen(false);
       await load();
     } catch (e) {
-      toast((e as Error).message, "error");
+      setModalError((e as Error).message);
     } finally {
       setCalling(false);
     }
@@ -45,19 +58,19 @@ export function CaptureOverview() {
 
   const previewVoice = async () => {
     if (!capture) return;
+    const version = ++previewVersion.current;
+    previewAudio.current?.stop();
+    if (previewing) { setPreviewing(false); return; }
     setPreviewing(true);
     try {
       const first = capture.expert.name.split(" ")[0];
-      const line = `Hi, this is ${first}'s knowledge twin. Ask me anything about ${capture.expert.role.toLowerCase()} and I'll answer from what ${first} actually said.`;
-      try {
-        await new BlobPlayer().play(await api.speak(line, capture.id));
-      } catch (e) {
-        toast(`Higgs voice busy (${(e as Error).message.slice(0, 60)}…); using browser voice.`, "info");
-        const u = new SpeechSynthesisUtterance(line);
-        window.speechSynthesis?.speak(u);
-      }
+      const line = `Hi, this is ${first}'s knowledge twin. Ask about the captured knowledge and I'll answer with sources from ${first}'s interviews.`;
+      previewAudio.current ??= new SpokenAudio(() => toast("The studio voice is unavailable. Trying browser voice.", "info"));
+      await previewAudio.current.speak(line, health?.higgs ? () => api.speak(line, capture.id) : undefined);
+    } catch (e) {
+      if (version === previewVersion.current) toast((e as Error).message, "error");
     } finally {
-      setPreviewing(false);
+      if (version === previewVersion.current) setPreviewing(false);
     }
   };
 
@@ -76,7 +89,7 @@ export function CaptureOverview() {
     });
   }, [load, nav, toast]);
 
-  if (!capture) return <div className="h-64 rounded-2xl bg-paper-2 animate-pulse" />;
+  if (!capture) return <div role="status" aria-label="Loading capture" className="h-64 rounded-2xl bg-paper-2 animate-pulse" />;
 
   const days = daysUntil(capture.expert.departureDate);
   const open = questions.filter((q) => q.status !== "answered" && q.source !== "plan");
@@ -84,7 +97,8 @@ export function CaptureOverview() {
   const visibleAtoms = (selectedDomain ? atoms.filter((a) => a.domainId === selectedDomain) : atoms).slice(0, 6);
 
   const addQuestion = async () => {
-    if (!newQ.trim()) return;
+    if (!newQ.trim() || addingQuestion) return;
+    setAddingQuestion(true);
     try {
       await api.addQuestion(id, newQ.trim(), capture.successor?.name);
       setNewQ("");
@@ -92,13 +106,19 @@ export function CaptureOverview() {
       await load();
     } catch (e) {
       toast((e as Error).message, "error");
-    }
+    } finally { setAddingQuestion(false); }
   };
 
   const del = async () => {
-    await api.deleteCapture(id);
-    toast("Capture deleted");
-    nav("/app");
+    if (deleting) return;
+    setDeleting(true);
+    setModalError(null);
+    try {
+      await api.deleteCapture(id);
+      toast("Capture deleted");
+      nav("/app");
+    } catch (e) { setModalError((e as Error).message); }
+    finally { setDeleting(false); }
   };
 
   return (
@@ -125,8 +145,8 @@ export function CaptureOverview() {
               </p>
               <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[13.5px] text-muted">
                 {days !== null && (
-                  <Badge tone={days <= 30 ? "danger" : days <= 90 ? "amber" : "neutral"} icon={<Clock className="h-3 w-3" />}>
-                    {days < 0 ? `Left ${fmtDate(capture.expert.departureDate)}` : `${days} days until ${fmtDate(capture.expert.departureDate)}`}
+                  <Badge tone={days < 0 ? "neutral" : days <= 30 ? "danger" : days <= 90 ? "amber" : "neutral"} icon={<Clock className="h-3 w-3" />}>
+                    {days < 0 ? `Left ${fmtDate(capture.expert.departureDate)}` : days === 0 ? "Leaves today" : `Last day: ${fmtDate(capture.expert.departureDate)} · ${plural(days, "day")} left`}
                   </Badge>
                 )}
                 {capture.successor && (
@@ -140,7 +160,7 @@ export function CaptureOverview() {
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Button variant="accent" size="lg" icon={<Mic className="h-4 w-4" />} onClick={() => nav(`/c/${id}/interview`)}>
-              {sessions.length ? "Continue interviewing" : "Start first interview"}
+              {sessions.length ? "New interview" : "Start interview"}
             </Button>
             <Button size="lg" icon={<MessageSquareText className="h-4 w-4" />} onClick={() => nav(`/c/${id}/ask`)}>
               Ask the twin
@@ -153,33 +173,34 @@ export function CaptureOverview() {
             Constellation
           </Button>
           <Button size="sm" variant="ghost" icon={<FileText className="h-3.5 w-3.5" />} onClick={() => nav(`/c/${id}/handover`)}>
-            Handover doc
+            Handover
           </Button>
-          {health?.higgs && (
-            <Button size="sm" variant="ghost" icon={<Volume2 className="h-3.5 w-3.5" />} onClick={previewVoice} loading={previewing} title={capture.voiceId ? "Hear the twin in the expert's cloned voice" : "Hear the twin (default Higgs voice)"}>
-              Hear the twin
+          {(health?.higgs || BrowserVoice.synthesisSupported()) && (
+            <Button size="sm" variant="ghost" icon={previewing ? <Square className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />} onClick={previewVoice} aria-pressed={previewing} title={capture.voiceId ? "Hear the twin in the expert's cloned voice" : health?.higgs ? "Hear the twin in the default studio voice" : "Hear the twin in a browser voice"}>
+              {previewing ? "Stop preview" : "Hear the twin"}
             </Button>
           )}
           <Button
             size="sm"
             variant="ghost"
             icon={<Phone className="h-3.5 w-3.5" />}
-            onClick={() => (health?.phone ? setCallOpen(true) : toast("Phone interviews need LiveKit + Twilio configured on the server (see docs/PHONE.md).", "info"))}
+            onClick={() => { setModalError(null); health?.phone ? setCallOpen(true) : toast("Phone interviews need LiveKit + Twilio configured on the server (see docs/PHONE.md).", "info"); }}
             title={health?.phone ? "Tacit calls the expert's phone" : "Configure LiveKit + Twilio to enable phone interviews"}
             className={health?.phone ? "" : "opacity-60"}
           >
             Call the expert
           </Button>
           <div className="relative ml-auto">
-            <Button variant="ghost" size="sm" onClick={() => setMenu(!menu)} aria-label="More">
+            <Button id="capture-actions" variant="ghost" size="sm" onClick={() => setMenu(!menu)} aria-label="Capture actions" aria-expanded={menu}>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
             {menu && (
-              <div className="absolute right-0 z-10 mt-1 w-44 rounded-xl border border-line bg-paper p-1 shadow-lift" onMouseLeave={() => setMenu(false)}>
+              <div className="absolute right-0 z-10 mt-1 w-44 rounded-xl border border-line bg-paper p-1 shadow-lift" onKeyDown={(e) => { if (e.key === "Escape") { setMenu(false); document.getElementById("capture-actions")?.focus(); } }}>
                 <button
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-danger hover:bg-danger-2"
                   onClick={() => {
                     setMenu(false);
+                    setModalError(null);
                     setConfirmDelete(true);
                   }}
                 >
@@ -193,7 +214,7 @@ export function CaptureOverview() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Coverage" value={pct(capture.stats.coverage)} hint={`${capture.domains.length} domains, weighted by priority`} tone={capture.stats.coverage > 0.66 ? "sage" : "accent"} />
-        <Stat label="Knowledge atoms" value={capture.stats.atoms} hint={`${capture.stats.verifiedAtoms} verified by ${capture.expert.name.split(" ")[0]}`} />
+        <Stat label="Knowledge atoms" value={capture.stats.atoms} hint={`${capture.stats.verifiedAtoms} marked verified`} />
         <Stat label="Interview time" value={fmtDuration(capture.stats.minutes)} hint={plural(capture.stats.sessions, "session")} />
         <Stat label="Open questions" value={open.length} hint="asked first next session" tone={open.length ? "accent" : "neutral"} />
       </div>
@@ -210,7 +231,7 @@ export function CaptureOverview() {
           <Card>
             <CardHeader
               title="Question queue"
-              subtitle={open.length ? `${open.length} waiting for ${capture.expert.name.split(" ")[0]}` : "Nothing waiting — the twin has answered everything asked so far."}
+              subtitle={open.length ? `${open.length} waiting for ${capture.expert.name.split(" ")[0]}` : "No questions queued for the next interview."}
             />
             <div className="px-5 pb-5 space-y-2">
               {open.map((q) => (
@@ -226,8 +247,8 @@ export function CaptureOverview() {
                 </div>
               ))}
               <div className="flex gap-2 pt-1">
-                <Input value={newQ} onChange={(e) => setNewQ(e.target.value)} placeholder="Queue a question for the next interview…" onKeyDown={(e) => e.key === "Enter" && addQuestion()} />
-                <Button onClick={addQuestion} icon={<Plus className="h-4 w-4" />} aria-label="Add question" />
+                <Input aria-label="Question for the next interview" value={newQ} onChange={(e) => setNewQ(e.target.value)} placeholder="Queue a question for the next interview…" onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && addQuestion()} />
+                <Button onClick={addQuestion} loading={addingQuestion} disabled={!newQ.trim()} icon={<Plus className="h-4 w-4" />} aria-label="Add question" />
               </div>
             </div>
           </Card>
@@ -241,7 +262,7 @@ export function CaptureOverview() {
                   <div className="flex items-center justify-between text-[12.5px]">
                     <span className="font-medium">{fmtDate(s.startedAt, { month: "short", day: "numeric" })} · {fmtRelative(s.startedAt)}</span>
                     <span className="text-muted">
-                      {s.mode === "voice-higgs" ? "Higgs voice" : s.mode === "voice-browser" ? "Voice" : "Text"} · {s.turnCount} turns · {s.atomCount} atoms
+                      {s.mode === "voice-higgs" ? "Higgs Realtime" : s.mode === "voice-browser" ? "Browser voice" : "Typed answers"} · {s.turnCount} turns · {s.atomCount} atoms
                       {!s.endedAt && <span className="ml-1 text-accent">· live</span>}
                     </span>
                   </div>
@@ -278,6 +299,7 @@ export function CaptureOverview() {
         open={callOpen}
         onClose={() => setCallOpen(false)}
         title={`Call ${capture.expert.name}`}
+        error={modalError}
         footer={
           <>
             <Button onClick={() => setCallOpen(false)}>Cancel</Button>
@@ -288,20 +310,21 @@ export function CaptureOverview() {
         }
       >
         <div className="space-y-3 text-sm text-ink-2">
-          <p>Tacit will ring {capture.expert.name.split(" ")[0]}'s phone through Twilio and run the interview on Higgs Realtime. The transcript and atoms land here live.</p>
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+14155551234" autoFocus />
-          <p className="text-[12px] text-muted">E.164 format, with country code.</p>
+          <p>Tacit will call {capture.expert.name.split(" ")[0]} and conduct the interview. The transcript and captured knowledge will appear here as they speak.</p>
+          <Field label="Expert's phone number" hint="Include + and the country code, for example +14155551234."><Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+14155551234" autoFocus /></Field>
         </div>
       </Modal>
 
       <Modal
         open={confirmDelete}
+        returnFocusId="capture-actions"
         onClose={() => setConfirmDelete(false)}
         title="Delete this capture?"
+        error={modalError}
         footer={
           <>
-            <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
-            <Button variant="danger" onClick={del} icon={<Trash2 className="h-4 w-4" />}>
+            <Button data-autofocus onClick={() => setConfirmDelete(false)}>Cancel</Button>
+            <Button variant="danger" onClick={del} loading={deleting} icon={<Trash2 className="h-4 w-4" />}>
               Delete
             </Button>
           </>

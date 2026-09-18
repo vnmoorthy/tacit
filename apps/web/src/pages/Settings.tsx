@@ -1,7 +1,6 @@
 import { Database, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { EngineBadge } from "../components/Layout.js";
-import { Button, Card, CardHeader, Field, Input, PageHeader, Select, Toggle } from "../components/ui.js";
+import { Button, Card, CardHeader, Field, Input, Modal, PageHeader, Select } from "../components/ui.js";
 import { getPreferredMode, setPreferredMode } from "../lib/api.js";
 import { DEFAULT_SETTINGS, clearLocalData, loadSettings, saveSettings, type LocalSettings } from "../lib/local.js";
 import { useApp } from "../lib/store.js";
@@ -11,20 +10,33 @@ export function Settings() {
   const [s, setS] = useState<LocalSettings>(loadSettings());
   const [mode, setMode] = useState(getPreferredMode());
   const [busy, setBusy] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   const save = async () => {
-    saveSettings(s);
-    setPreferredMode(mode);
     setBusy(true);
-    await init();
-    setBusy(false);
-    toast("Settings saved and engine restarted", "success");
+    try {
+      saveSettings(s);
+      setPreferredMode(mode);
+      await init();
+      const error = useApp.getState().error;
+      if (error) toast(error, "error");
+      else toast("Settings saved and engine restarted", "success");
+    } catch (e) { toast((e as Error).message, "error"); }
+    finally { setBusy(false); }
   };
 
   const reset = async () => {
-    clearLocalData();
-    await init();
-    toast("Local data cleared");
+    setBusy(true);
+    setResetError(null);
+    try {
+      clearLocalData();
+      await init();
+      setConfirmReset(false);
+      toast("Local captures deleted");
+    } catch (e) {
+      setResetError((e as Error).message);
+    } finally { setBusy(false); }
   };
 
   const loadSamples = async () => {
@@ -33,6 +45,8 @@ export function Settings() {
     try {
       const l = await api.loadSamples();
       toast(`Loaded ${l.length} sample captures`, "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
     } finally {
       setBusy(false);
     }
@@ -77,7 +91,7 @@ export function Settings() {
       </Card>
 
       <Card>
-        <CardHeader title="Standalone model" subtitle="Optional. Used only in standalone mode; calls go straight from your browser to the provider. Keys stay in this browser." />
+        <CardHeader title="Standalone model" subtitle="Optional. Settings are saved in this browser. Requests and the API key go directly to your chosen provider." />
         <div className="px-5 pb-5 space-y-4">
           <Field label="Provider">
             <Select value={s.provider} onChange={(e) => setS({ ...s, provider: e.target.value as LocalSettings["provider"] })}>
@@ -126,16 +140,20 @@ export function Settings() {
             Load sample captures
           </Button>
           {health?.mode === "local" && (
-            <Button variant="danger" onClick={reset} icon={<Trash2 className="h-4 w-4" />}>
-              Clear standalone data
+            <Button variant="danger" onClick={() => { setResetError(null); setConfirmReset(true); }} icon={<Trash2 className="h-4 w-4" />}>
+              Delete local captures
             </Button>
           )}
         </div>
       </Card>
 
       <Card className="p-5 text-[13px] text-ink-2 leading-relaxed">
-        <Toggle checked={false} onChange={() => toast("Phone-call interviews are on the roadmap (Twilio + Higgs).")} label="Phone-call interviews (coming soon)" />
+        <h2 className="font-medium text-ink">Phone interviews</h2>
+        <p className="mt-1">{health?.phone ? "Phone interviews are configured. Open a capture and choose “Call the expert”." : "Available when LiveKit and Twilio are configured on the server. Open a capture and choose “Call the expert” once setup is complete."}</p>
       </Card>
+      <Modal open={confirmReset} onClose={() => setConfirmReset(false)} title="Delete local captures?" error={resetError} footer={<><Button data-autofocus onClick={() => setConfirmReset(false)}>Cancel</Button><Button variant="danger" loading={busy} onClick={reset}>Delete local captures</Button></>}>
+        <p className="text-sm text-ink-2">This deletes captures, interviews and saved knowledge in this browser. Model settings and API keys remain. This cannot be undone.</p>
+      </Modal>
     </div>
   );
 }

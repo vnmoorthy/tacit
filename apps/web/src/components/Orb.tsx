@@ -6,9 +6,9 @@ export type OrbState = "idle" | "listening" | "thinking" | "speaking" | "off";
 export function Orb({ state, level = 0, size = 220 }: { state: OrbState; level?: number; size?: number }) {
   const l = Math.max(0, Math.min(1, level));
   const scale = state === "listening" ? 1 + l * 0.45 : state === "speaking" ? 1.08 : 1;
-  const ring = state === "listening" ? "#b8541e" : state === "speaking" ? "#e8b36b" : state === "thinking" ? "#345d8a" : "#cfc5b4";
+  const ring = state === "listening" ? "#e8a33d" : state === "speaking" ? "#f0b95c" : state === "thinking" ? "#6ea8fe" : "#c2a473";
   return (
-    <div className="relative grid place-items-center" style={{ width: size, height: size }}>
+    <div aria-hidden="true" className="relative grid place-items-center" style={{ width: size, height: size }}>
       {/* outer halo */}
       <div
         className="absolute rounded-full transition-transform duration-100"
@@ -28,18 +28,22 @@ export function Orb({ state, level = 0, size = 220 }: { state: OrbState; level?:
       )}
       {/* core */}
       <div
-        className={cx("relative rounded-full transition-transform duration-100", state === "idle" && "animate-[orb-breathe_3.2s_ease-in-out_infinite]")}
+        className={cx("relative overflow-hidden rounded-full transition-transform duration-100", state === "idle" && "animate-[orb-breathe_4.5s_ease-in-out_infinite]")}
         style={{
           width: size * 0.42,
           height: size * 0.42,
           transform: `scale(${scale})`,
           background:
             state === "off"
-              ? "radial-gradient(circle at 35% 30%, #d9d0c1, #8a8377)"
-              : "radial-gradient(circle at 35% 30%, #f6e3c3 0%, #e8b36b 35%, #b8541e 75%, #6e2e0c 100%)",
-          boxShadow: state === "off" ? "none" : `0 10px 40px -8px ${ring}aa, inset 0 -8px 20px rgba(0,0,0,.25)`,
+              ? "radial-gradient(circle at 30% 24%, #b7b3a9, #55514a 62%, #1b1b1a)"
+              : "radial-gradient(ellipse at 65% 78%, #e8a33d66, transparent 51%), radial-gradient(circle at 30% 23%, #fff1cd 0%, #e9bb72 20%, #a15a20 55%, #412411 82%, #110e0a 100%)",
+          boxShadow: state === "off" ? "inset 0 0 1px #ffffff66" : `0 14px 40px -16px ${ring}aa, inset 0 0 1px #fff6dbaa, inset -4px -8px 14px #180d0b66`,
         }}
-      />
+      >
+        <span className="absolute left-[14%] top-[10%] h-[32%] w-[56%] -rotate-[25deg] rounded-full" style={{ background: "linear-gradient(165deg, #fff9eaa6, #fff2d322 50%, transparent 80%)" }} />
+        <span className="absolute inset-[5%] rounded-full border border-[#ffdda522]" />
+        <span className="absolute bottom-[9%] left-[18%] h-[35%] w-[67%] rounded-[50%] border-b-2 border-[#f4b15c66] blur-[1px]" />
+      </div>
       {/* speaking bars */}
       {state === "speaking" && (
         <div className="absolute flex items-end gap-1" style={{ bottom: size * 0.16 }}>

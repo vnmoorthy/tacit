@@ -8,7 +8,7 @@ import { Avatar, Badge, Button, Card, CardHeader, Input, PageHeader, cx } from "
 import { fmtRelative } from "../lib/format.js";
 import { useApi, useApp } from "../lib/store.js";
 import { BrowserVoice } from "../lib/voice/browserVoice.js";
-import { BlobPlayer } from "../lib/voice/player.js";
+import { SpokenAudio } from "../lib/voice/spokenAudio.js";
 
 interface Exchange {
   id: number;
@@ -27,105 +27,152 @@ export function Ask() {
   const api = useApi();
   const health = useApp((s) => s.health);
   const toast = useApp((s) => s.toast);
-  const player = useRef(new BlobPlayer());
+  const speech = useRef<SpokenAudio | null>(null);
   const [capture, setCapture] = useState<Capture | null>(null);
   const [atoms, setAtoms] = useState<Record<string, Atom>>({});
   const [questions, setQuestions] = useState<Question[]>([]);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [speakAnswers, setSpeakAnswers] = useState(false);
+  const [speakAnswers, setSpeakAnswers] = useState(true);
   const [listening, setListening] = useState(false);
   const [focusAtom, setFocusAtom] = useState<string | null>(null);
   const voice = useRef<BrowserVoice | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
+  const generation = useRef(0);
+  const busyRef = useRef(false);
+  const speakRef = useRef(true);
+  const playback = useRef(0);
+  const askRef = useRef<(text: string) => Promise<void>>(async () => undefined);
+  const micPending = useRef<Promise<BrowserVoice> | null>(null);
+  const [speakingId, setSpeakingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
+    const room = generation.current;
     const [c, a, q] = await Promise.all([api.getCapture(id), api.listAtoms(id), api.listQuestions(id)]);
+    if (room !== generation.current) return;
     setCapture(c);
     setAtoms(Object.fromEntries(a.map((x) => [x.id, x])));
     setQuestions(q);
   }, [api, id]);
 
   useEffect(() => {
+    setCapture(null);
+    setExchanges([]);
+    setInput("");
+    setBusy(false);
+    setListening(false);
+    busyRef.current = false;
     load().catch((e) => toast((e as Error).message, "error"));
-    return () => voice.current?.destroy();
+    return () => {
+      generation.current++;
+      playback.current++;
+      voice.current?.destroy();
+      voice.current = null;
+      speech.current?.destroy();
+      speech.current = null;
+    };
   }, [load, toast]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [exchanges]);
 
-  const ask = async (text: string) => {
-    const q = text.trim();
-    if (!q || !capture) return;
-    setInput("");
-    const ex: Exchange = { id: ++seq.current, question: q };
-    setExchanges((xs) => [...xs, ex]);
-    setBusy(true);
-    try {
-      const result = await api.ask(id, q, capture.successor?.name);
-      setExchanges((xs) => xs.map((x) => (x.id === ex.id ? { ...x, result } : x)));
-      if (result.queuedQuestion) {
-        toast(`Queued for ${capture.expert.name.split(" ")[0]}'s next interview`);
-        setQuestions(await api.listQuestions(id));
-      }
-      if (speakAnswers) {
-        const plain = result.answer.replace(/\[\d+\]/g, "").replace(/[*#>_`]/g, "").replace(/\s+/g, " ").trim().slice(0, 700);
-        if (health?.higgs) {
-          try {
-            await player.current.play(await api.speak(plain, id));
-          } catch (e) {
-            toast(`Higgs voice unavailable (${(e as Error).message}); using browser voice.`, "info");
-            await voice.current?.speak(plain);
-          }
-        } else {
-          await voice.current?.speak(plain);
-        }
-      }
-    } catch (e) {
-      setExchanges((xs) => xs.map((x) => (x.id === ex.id ? { ...x, error: (e as Error).message } : x)));
-    } finally {
-      setBusy(false);
-    }
+  const stopSpeech = () => {
+    playback.current++;
+    speech.current?.stop();
+    setSpeakingId(null);
   };
 
+  const readAnswer = async (answer: string, exchangeId: number) => {
+    stopSpeech();
+    voice.current?.stopListening();
+    const token = playback.current;
+    const room = generation.current;
+    const plain = answer.replace(/\[\d+\]/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[*#>_`]/g, "").replace(/\s+/g, " ").trim().slice(0, 3800);
+    speech.current ??= new SpokenAudio(() => toast("Natural voice is unavailable. Using this browser's voice.", "info"), capture?.expert.language);
+    setSpeakingId(exchangeId);
+    try { await speech.current.speak(plain, health?.higgs ? () => api.speak(plain, id) : undefined); }
+    catch (error) { if (room === generation.current) toast((error as Error).message, "error"); }
+    finally { if (room === generation.current && token === playback.current) setSpeakingId(null); }
+  };
+
+  const ask = async (text: string) => {
+    const question = text.trim();
+    if (!question || !capture || busyRef.current) return;
+    busyRef.current = true;
+    const room = generation.current;
+    voice.current?.stopListening();
+    stopSpeech();
+    setInput("");
+    const exchange: Exchange = { id: ++seq.current, question };
+    setExchanges((previous) => [...previous, exchange]);
+    setBusy(true);
+    try {
+      const result = await api.ask(id, question, capture.successor?.name);
+      if (room !== generation.current) return;
+      setExchanges((previous) => previous.map((item) => item.id === exchange.id ? { ...item, result } : item));
+      if (result.queuedQuestion) {
+        toast(`Queued for ${capture.expert.name.split(" ")[0]}'s next interview`);
+        void api.listQuestions(id).then((items) => { if (room === generation.current) setQuestions(items); }).catch(() => undefined);
+      }
+      // The response is available immediately; spoken playback can be interrupted.
+      busyRef.current = false;
+      setBusy(false);
+      if (speakRef.current) void readAnswer(result.answer, exchange.id);
+    } catch (error) {
+      if (room === generation.current) {
+        setExchanges((previous) => previous.map((item) => item.id === exchange.id ? { ...item, error: (error as Error).message } : item));
+        setInput(question);
+      }
+    } finally {
+      if (room === generation.current) { busyRef.current = false; setBusy(false); }
+    }
+  };
+  askRef.current = ask;
+
   const ensureVoice = async () => {
+    if (micPending.current) return micPending.current;
     if (voice.current) return voice.current;
-    const v = new BrowserVoice({
-      onPartial: (t) => setInput(t),
-      onFinal: (t) => {
-        setListening(false);
-        void ask(t);
-      },
-      onState: (s) => setListening(s === "listening"),
-      onLevel: () => undefined,
-      onError: (m) => toast(m, "error"),
-    });
-    await v.init();
-    voice.current = v;
-    return v;
+    const room = generation.current;
+    const current = new BrowserVoice({
+      onPartial: setInput,
+      onFinal: (text) => { setListening(false); void askRef.current(text); },
+      onState: (state) => setListening(state === "listening"),
+      onLevel() {},
+      onError: (message) => toast(message, "error"),
+    }, capture?.expert.language);
+    voice.current = current;
+    micPending.current = current.init().then(() => {
+      if (room !== generation.current) throw new DOMException("Voice setup cancelled", "AbortError");
+      return current;
+    }).catch((error) => {
+      current.destroy();
+      if (voice.current === current) voice.current = null;
+      throw error;
+    }).finally(() => { micPending.current = null; });
+    return micPending.current;
   };
 
   const toggleMic = async () => {
+    if (busyRef.current) return;
     if (!BrowserVoice.recognitionSupported()) {
-      toast("Speech recognition isn't available in this browser. Chrome works best.", "error");
+      toast("Speech recognition isn't available in this browser. Chrome works best. You can type below.", "error");
       return;
     }
+    stopSpeech();
     try {
-      const v = await ensureVoice();
-      if (listening) v.stopListening();
-      else v.listen();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
+      const current = await ensureVoice();
+      if (listening) current.stopListening();
+      else { current.idle(); current.listen(); }
+    } catch (error) { if ((error as Error).name !== "AbortError") toast((error as Error).message, "error"); }
   };
 
-  const toggleSpeak = async () => {
-    if (!speakAnswers && !health?.higgs) await ensureVoice().catch(() => undefined);
-    if (speakAnswers) player.current.stop();
-    setSpeakAnswers(!speakAnswers);
+  const toggleSpeak = () => {
+    speakRef.current = !speakRef.current;
+    setSpeakAnswers(speakRef.current);
+    if (!speakRef.current) stopSpeech();
   };
 
   const first = capture?.expert.name.split(" ")[0] ?? "the expert";
@@ -139,7 +186,7 @@ export function Ask() {
         <PageHeader
           className="mb-4"
           eyebrow="Ask the twin"
-          title={`Ask ${first} anything`}
+          title={`Ask ${first}’s twin`}
           lede={
             <>
               Answers come only from what {first} actually said, with citations. If the twin doesn't know, the question goes to {first}'s next interview.
@@ -154,7 +201,7 @@ export function Ask() {
               <p className="text-[13px] text-muted mb-2">Try asking</p>
               <div className="flex flex-wrap gap-2">
                 {suggestions.map((s) => (
-                  <button key={s} onClick={() => ask(s)} className="rounded-full border border-line-2 bg-paper-2 px-3 py-1.5 text-left text-[13px] hover:border-muted">
+                  <button key={s} onClick={() => ask(s)} disabled={busy || !capture} className="rounded-full border border-line-2 bg-paper-2 px-3 py-1.5 text-left text-[13px] hover:border-muted">
                     {s}
                   </button>
                 ))}
@@ -170,7 +217,7 @@ export function Ask() {
                 {capture && <Avatar name={capture.expert.name} size={34} />}
                 <div className="min-w-0 flex-1">
                   {!ex.result && !ex.error && (
-                    <div className="flex items-center gap-2 text-sm text-muted">
+                    <div role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-muted">
                       <span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Searching {first}'s knowledge…
                     </div>
                   )}
@@ -188,6 +235,12 @@ export function Ask() {
                           </Badge>
                         )}
                       </div>
+                      <div className="mb-2 flex justify-end">
+                        <Button size="sm" variant="ghost" onClick={() => speakingId === ex.id ? stopSpeech() : void readAnswer(ex.result!.answer, ex.id)} icon={speakingId === ex.id ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}>
+                          {speakingId === ex.id ? "Stop audio" : "Read answer aloud"}
+                        </Button>
+                      </div>
+                      <span className="sr-only" role="status">Answer ready with {ex.result.citations.length} sources.</span>
                       <Markdown onCite={(n) => setFocusAtom(ex.result?.citations.find((c) => c.n === n)?.atomId ?? null)}>{ex.result.answer}</Markdown>
                       {ex.result.citations.length > 0 && (
                         <div className="mt-3 space-y-2 border-t border-line pt-3">
@@ -220,17 +273,19 @@ export function Ask() {
             void ask(input);
           }}
         >
-          <Button type="button" variant={listening ? "accent" : "secondary"} onClick={toggleMic} icon={listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} aria-label="Ask by voice" />
-          <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening…" : `Ask ${first} a question…`} className={cx("h-11", listening && "border-accent")} />
+          <Button type="button" variant={listening ? "accent" : "secondary"} onClick={toggleMic} disabled={busy} aria-pressed={listening} icon={listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} aria-label={listening ? "Stop microphone" : "Ask by voice"} />
+          <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening…" : `Ask ${first} a question…`} aria-label="Your question" className={cx("h-11", listening && "border-accent")} />
           <Button
             type="button"
-            className="hidden sm:inline-flex"
+            className="shrink-0"
+            aria-label={speakAnswers ? "Turn off spoken answers" : "Turn on spoken answers"}
+            aria-pressed={speakAnswers}
             variant={speakAnswers ? "accent" : "ghost"}
             onClick={toggleSpeak}
             icon={speakAnswers ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             title={health?.higgs ? (capture?.voiceId ? `Read answers aloud in ${first}'s cloned voice (Higgs Audio)` : "Read answers aloud (Higgs Audio)") : "Read answers aloud"}
           />
-          <Button type="submit" variant="primary" loading={busy} icon={<Send className="h-4 w-4" />}>
+          <Button type="submit" variant="primary" loading={busy} disabled={!input.trim() || !capture} icon={<Send className="h-4 w-4" />}>
             Ask
           </Button>
         </form>
@@ -238,7 +293,7 @@ export function Ask() {
 
       <aside className="space-y-4">
         <Card>
-          <CardHeader title="Waiting for the expert" subtitle={open.length ? `${open.length} question${open.length === 1 ? "" : "s"} go first next session` : "The queue is empty"} />
+          <CardHeader title="Waiting for the expert" subtitle={open.length ? `${open.length} question${open.length === 1 ? " goes" : "s go"} first next session` : "The queue is empty"} />
           <div className="px-5 pb-5 space-y-2">
             {open.map((q) => (
               <div key={q.id} className="rounded-lg border border-accent/40 bg-accent-3/60 px-3 py-2 text-[13px]">
@@ -252,7 +307,7 @@ export function Ask() {
         </Card>
         <Card className="p-5 text-[13px] text-ink-2 leading-relaxed">
           <p className="font-medium text-ink mb-1">How the twin answers</p>
-          <p>Hybrid retrieval (BM25 + embeddings when available) finds the most relevant atoms; the model answers only from those and cites each one. Low-confidence answers automatically queue the question for {first}.</p>
+          <p>The twin finds relevant knowledge from {first}’s interviews and shows a source for each answer. When there is not enough evidence, your question goes to {first} for the next interview.</p>
         </Card>
       </aside>
     </div>

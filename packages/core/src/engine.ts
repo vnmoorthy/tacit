@@ -4,7 +4,7 @@ import { buildGraph, type GraphData } from "./graph.js";
 import { compileHandover } from "./handover.js";
 import { newId, nowIso } from "./ids.js";
 import type { Embedder } from "./llm.js";
-import { INTERVIEWER_PERSONA, captureBrief, coverageBrief, isEnglish, languageName } from "./prompts.js";
+import { INTERVIEWER_PERSONA, captureBrief, coverageBrief, isEnglish, languageName, memoryBrief } from "./prompts.js";
 import { ensureEmbeddings, retrieve } from "./retrieval.js";
 import type { Store } from "./store.js";
 import { wordCount } from "./text.js";
@@ -320,7 +320,8 @@ export class Engine {
     const questions = await this.store.listQuestions(capture.id);
     const successorQuestions = questions.filter((q) => q.status === "open" && (q.source === "successor" || q.source === "gap"));
     const suggested = suggestNext(capture);
-    return this.brain.nextQuestion({ capture, recentTurns: turns.slice(-10), lastAtoms, successorQuestions, suggested, isOpening });
+    const memory = (await this.store.listAtoms(capture.id)).slice(0, 8);
+    return this.brain.nextQuestion({ capture, recentTurns: turns.slice(-10), lastAtoms, successorQuestions, suggested, isOpening, memory });
   }
 
   private async commitInterviewerTurn(session: Session, capture: Capture, turns: Turn[], nq: NextQuestion): Promise<Turn> {
@@ -405,9 +406,10 @@ export class Engine {
       successorQuestions.length
         ? `\nThe successor already asked these and got no answer — ask them early, in the expert's language:\n${successorQuestions.map((q) => `- ${q.text}`).join("\n")}`
         : "",
+      memoryBrief((await this.store.listAtoms(captureId)).slice(0, 8)),
       suggested ? `\nOpen by greeting ${capture.expert.name.split(" ")[0]} in one sentence, then ask: "${suggested.question}"` : "",
       !isEnglish(capture.expert.language) ? `\nConduct the entire conversation in ${languageName(capture.expert.language)} (translate the questions above). If the expert switches language, follow them.` : "",
-      "\nAsk exactly one question per turn. Keep every turn under 45 words.",
+      "\nAsk exactly one question per turn. React to what they said first, then ask. Keep every turn under 55 words. Speak naturally, with pauses; this is a conversation, not a form.",
     ]
       .filter((l) => l !== "")
       .join("\n");

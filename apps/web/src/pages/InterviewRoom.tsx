@@ -1,5 +1,5 @@
 import { ArrowLeft, Keyboard, Mic, MicOff, Radio, Send, Square, Volume2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Atom, Capture, Session, Turn } from "@tacit/core";
 import { AtomCard } from "../components/AtomCard.js";
@@ -9,6 +9,7 @@ import { pct } from "../lib/format.js";
 import { useApi, useApp } from "../lib/store.js";
 import { BrowserVoice } from "../lib/voice/browserVoice.js";
 import { HiggsVoice } from "../lib/voice/higgsVoice.js";
+import { SpokenAudio } from "../lib/voice/spokenAudio.js";
 import { ReferenceRecorder } from "../lib/voice/recorder.js";
 
 type EngineKind = "higgs" | "browser" | "text";
@@ -43,6 +44,7 @@ export function InterviewRoom() {
   const [muted, setMuted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [ended, setEnded] = useState<Session | null>(null);
   const [newestAtom, setNewestAtom] = useState<string | null>(null);
 
@@ -50,9 +52,23 @@ export function InterviewRoom() {
   const hv = useRef<HiggsVoice | null>(null);
   const recorder = useRef<ReferenceRecorder | null>(null);
   const [reference, setReference] = useState<{ blob: Blob; transcript: string } | null>(null);
+  const [recordConsent, setRecordConsent] = useState(false);
   const [cloning, setCloning] = useState(false);
   const [clonedVoice, setClonedVoice] = useState<string | null>(null);
   const sessionRef = useRef<Session | null>(null);
+  const engineRef = useRef(engine);
+  engineRef.current = engine;
+  const mutedRef = useRef(false);
+  const endingRef = useRef(false);
+  const startingRef = useRef(false);
+  const generation = useRef(0);
+  const pending = useRef(Promise.resolve());
+  const pendingCount = useRef(0);
+  const speech = useRef<SpokenAudio | null>(null);
+  const playback = useRef(0);
+  const playbackBusy = useRef(false);
+  const atomTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const submitRef = useRef<(text: string, source?: "voice" | "text") => void>(() => undefined);
   const skipFirstAssistant = useRef(false);
   const transcriptEnd = useRef<HTMLDivElement>(null);
   const timer = useTimer(Boolean(session) && !ended);
@@ -71,175 +87,259 @@ export function InterviewRoom() {
     transcriptEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [turns, partial, assistantPartial]);
 
-  // Tear down voice engines (and close the session) when leaving the room.
-  useEffect(() => {
-    return () => {
-      bv.current?.destroy();
-      hv.current?.disconnect();
-      const s = sessionRef.current;
-      if (s && !s.endedAt) void api.endSession(s.id).catch(() => undefined);
-    };
+  // Async setup, speech downloads and pending turns must not survive navigation.
+  useEffect(() => () => {
+    hv.current?.flushTranscripts();
+    generation.current++;
+    endingRef.current = true;
+    playback.current++;
+    clearTimeout(atomTimer.current);
+    bv.current?.destroy();
+    hv.current?.disconnect();
+    speech.current?.destroy();
+    void recorder.current?.stop();
+    const current = sessionRef.current;
+    if (current && !current.endedAt) void pending.current.then(() => api.endSession(current.id)).catch(() => undefined);
   }, [api]);
 
   const pushAtoms = (list: Atom[]) => {
     if (!list.length) return;
-    setAtoms((prev) => [...list, ...prev]);
+    setAtoms((previous) => [...list, ...previous]);
     setNewestAtom(list[0].id);
-    setTimeout(() => setNewestAtom(null), 2500);
+    clearTimeout(atomTimer.current);
+    atomTimer.current = setTimeout(() => setNewestAtom(null), 2500);
   };
 
-  /** Expert said something (voice or typed). Browser/text engines: Tacit thinks and replies. */
-  const submitExpert = useCallback(
-    async (text: string) => {
-      const s = sessionRef.current;
-      const t = text.trim();
-      if (!s || !t || ended) return;
-      const optimistic: Turn = { id: `tmp_${Date.now()}`, sessionId: s.id, captureId: id, role: "expert", text: t, at: new Date().toISOString() };
-      setTurns((xs) => [...xs, optimistic]);
-      setPartial("");
-      setBusy(true);
-      bv.current?.thinking();
-      setVoiceState("thinking");
+  const stopAudio = () => {
+    playback.current++;
+    playbackBusy.current = false;
+    speech.current?.stop();
+    bv.current?.stopSpeaking();
+  };
+
+  const speakLine = async (text: string) => {
+    stopAudio();
+    const token = playback.current;
+    playbackBusy.current = true;
+    const room = generation.current;
+    bv.current?.thinking();
+    speech.current ??= new SpokenAudio(
+      () => toast("Natural voice is unavailable. Using this browser's voice.", "info"),
+      capture?.expert.language,
+      setVoiceState,
+    );
+    try { await speech.current.speak(text, health?.higgs ? () => api.speak(text) : undefined); }
+    catch (error) { if (room === generation.current) toast((error as Error).message, "error"); }
+    if (token !== playback.current || room !== generation.current || endingRef.current) return;
+    playbackBusy.current = false;
+    bv.current?.idle();
+    if (engineRef.current === "browser" && !mutedRef.current) bv.current?.listen();
+    else setVoiceState("idle");
+  };
+
+  /** Serialize persistence so fast realtime transcripts cannot overwrite each other. */
+  const submitExpert = (text: string, source: "voice" | "text" = "text") => {
+    const current = sessionRef.current;
+    const value = text.trim();
+    if (!current || !value || current.endedAt || endingRef.current || startingRef.current) return;
+    if (source === "text" && pendingCount.current) return;
+    const room = generation.current;
+    const mode = engineRef.current;
+    const optimistic: Turn = { id: `tmp_${crypto.randomUUID()}`, sessionId: current.id, captureId: id, role: "expert", text: value, at: new Date().toISOString() };
+    setTurns((previous) => [...previous, optimistic]);
+    setPartial("");
+    setTyped("");
+    pendingCount.current++;
+    setBusy(true);
+    if (mode !== "higgs") { stopAudio(); bv.current?.thinking(); setVoiceState("thinking"); }
+    pending.current = pending.current.then(async () => {
+      let saved = false;
       try {
-        const generateNext = engine !== "higgs";
-        const r = await api.expertTurn(s.id, t, generateNext);
-        setTurns((xs) => xs.map((x) => (x.id === optimistic.id ? r.expertTurn : x)).concat(r.interviewerTurn ? [r.interviewerTurn] : []));
-        pushAtoms(r.atoms);
-        setCapture(r.capture);
-        if (engine === "higgs" && hv.current) {
-          // Refresh the interviewer's agenda with the new coverage state.
-          api.instructions(id).then((ins) => hv.current?.updateInstructions(ins)).catch(() => undefined);
-          setVoiceState("listening");
-        } else if (r.interviewerTurn && engine === "browser" && bv.current) {
-          await bv.current.speak(r.interviewerTurn.text);
-          if (!muted) bv.current.listen();
-          else setVoiceState("idle");
+        const result = await api.expertTurn(current.id, value, mode !== "higgs");
+        saved = true;
+        if (room !== generation.current) return;
+        setTurns((previous) => previous.map((turn) => turn.id === optimistic.id ? result.expertTurn : turn).concat(result.interviewerTurn ? [result.interviewerTurn] : []));
+        pushAtoms(result.atoms);
+        setCapture(result.capture);
+        if (endingRef.current) return;
+        if (mode === "higgs" && hv.current) {
+          const instructions = await api.instructions(id).catch(() => null);
+          if (room !== generation.current || endingRef.current) return;
+          if (instructions) hv.current?.updateInstructions(instructions);
+          if (source === "text") hv.current?.sendText(value);
+        } else if (result.interviewerTurn && mode === "browser" && engineRef.current === "browser") {
+          await speakLine(result.interviewerTurn.text);
+        } else { setVoiceState("idle"); }
+      } catch (error) {
+        if (room !== generation.current) return;
+        toast((error as Error).message, "error");
+        if (saved) {
+          useTextMode();
+          toast("Your answer was saved. Voice could not continue; retry voice or keep typing.", "info");
         } else {
-          setVoiceState("idle");
+          // Keep the answer recoverable if saving failed.
+          setTyped(value);
+          setTurns((previous) => previous.filter((turn) => turn.id !== optimistic.id));
         }
-      } catch (e) {
-        toast((e as Error).message, "error");
-        setTurns((xs) => xs.filter((x) => x.id !== optimistic.id));
-        if (engine === "browser" && !muted) bv.current?.listen();
+        bv.current?.idle();
+        setVoiceState("idle");
+        if (mode === "browser" && !mutedRef.current && !endingRef.current) bv.current?.listen();
       } finally {
-        setBusy(false);
+        pendingCount.current--;
+        if (room === generation.current) setBusy(pendingCount.current > 0 || endingRef.current);
       }
-    },
-    [api, engine, ended, id, muted, toast],
-  );
+    });
+  };
+  submitRef.current = submitExpert;
+
+  const useTextMode = () => {
+    stopAudio();
+    bv.current?.destroy();
+    hv.current?.disconnect();
+    bv.current = null;
+    hv.current = null;
+    engineRef.current = "text";
+    mutedRef.current = false;
+    setMuted(false);
+    setEngine("text");
+    setAssistantPartial("");
+    setPartial("");
+    setVoiceState("idle");
+  };
 
   const start = async () => {
-    if (!capture) return;
+    if (!capture || startingRef.current || pendingCount.current) return;
+    const activeEngine = engineRef.current;
+    startingRef.current = true;
+    endingRef.current = false;
+    const room = generation.current;
     setStarting(true);
     try {
-      const mode = engine === "higgs" ? "voice-higgs" : engine === "browser" ? "voice-browser" : "text";
-      const r = await api.startSession(id, mode);
-      sessionRef.current = r.session;
-      setSession(r.session);
-      setCapture(r.capture);
-      setTurns([r.interviewerTurn]);
+      const mode = activeEngine === "higgs" ? "voice-higgs" : activeEngine === "browser" ? "voice-browser" : "text";
+      const existing = sessionRef.current;
+      const lastQuestion = [...turns].reverse().find((turn) => turn.role === "interviewer");
+      const rejoining = Boolean(existing && !existing.endedAt && lastQuestion);
+      const result = rejoining ? { session: existing!, capture, interviewerTurn: lastQuestion! } : await api.startSession(id, mode);
+      if (room !== generation.current) { void api.endSession(result.session.id).catch(() => undefined); return; }
+      sessionRef.current = result.session;
+      setSession(result.session);
+      setCapture(result.capture);
+      if (!rejoining) setTurns([result.interviewerTurn]);
 
-      if (engine === "browser") {
-        const v = new BrowserVoice(
-          {
-            onPartial: setPartial,
-            onFinal: (t) => void submitExpert(t),
-            onState: setVoiceState,
-            onLevel: setLevel,
-            onError: (m) => toast(m, "error"),
-          },
-          capture.expert.language,
-        );
-        bv.current = v;
-        await v.init();
-        if (health?.higgs && v.stream && ReferenceRecorder.supported()) {
-          recorder.current = new ReferenceRecorder();
-          recorder.current.start(v.stream);
-        }
-        await v.speak(r.interviewerTurn.text);
-        v.listen();
-      } else if (engine === "higgs") {
-        const info = await api.higgsSession(id);
-        skipFirstAssistant.current = true;
-        const v = new HiggsVoice({
+      if (activeEngine === "browser") {
+        const voice = new BrowserVoice({
+          onPartial: setPartial,
+          onFinal: (text) => submitRef.current(text, "voice"),
           onState: setVoiceState,
           onLevel: setLevel,
-          onError: (m) => toast(m, "error"),
-          onUserTranscript: (t) => void submitExpert(t),
+          onError: (message) => { toast(message, "error"); mutedRef.current = true; setMuted(true); },
+        }, capture.expert.language);
+        bv.current = voice;
+        await voice.init();
+        if (room !== generation.current) return;
+        if (recordConsent && health?.higgs && voice.stream && ReferenceRecorder.supported()) {
+          recorder.current = new ReferenceRecorder();
+          recorder.current.start(voice.stream);
+        }
+        await speakLine(result.interviewerTurn.text);
+      } else if (activeEngine === "higgs") {
+        const info = await api.higgsSession(id);
+        if (room !== generation.current) return;
+        skipFirstAssistant.current = true;
+        const voice = new HiggsVoice({
+          onState: setVoiceState,
+          onLevel: setLevel,
+          onError: (message) => toast(message, "error"),
+          onDisconnect: () => { if (room === generation.current && !endingRef.current) useTextMode(); },
+          onUserTranscript: (text) => submitRef.current(text, "voice"),
+          onUserPartial: setPartial,
           onAssistantPartial: setAssistantPartial,
-          onAssistantTranscript: (t) => {
+          onAssistantTranscript: (text) => {
+            if (room !== generation.current || endingRef.current) return;
             setAssistantPartial("");
             if (skipFirstAssistant.current) {
               skipFirstAssistant.current = false;
-              return;
+              const normalize = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+              if (normalize(text) === normalize(result.interviewerTurn.text)) return;
             }
-            const s = sessionRef.current;
-            if (!s) return;
-            api
-              .interviewerTurn(s.id, t)
-              .then((turn) => setTurns((xs) => [...xs, turn]))
-              .catch(() => setTurns((xs) => [...xs, { id: `tmp_${Date.now()}`, sessionId: s.id, captureId: id, role: "interviewer", text: t, at: new Date().toISOString() }]));
+            const current = sessionRef.current;
+            if (!current) return;
+            // Keep the transcript order visible even while the API is saving.
+            const turn: Turn = { id: `tmp_${crypto.randomUUID()}`, sessionId: current.id, captureId: id, role: "interviewer", text, at: new Date().toISOString() };
+            setTurns((previous) => [...previous, turn]);
+            pending.current = pending.current.then(async () => {
+              try {
+                const saved = await api.interviewerTurn(current.id, text);
+                if (room === generation.current) setTurns((previous) => previous.map((item) => item.id === turn.id ? saved : item));
+              } catch { if (room === generation.current) toast("The spoken question could not be saved. Your answers are still available.", "error"); }
+            });
           },
         });
-        hv.current = v;
-        await v.connect({ ...info, instructions: `${info.instructions}\n\nBegin the session by saying exactly this, then wait for the answer: "${r.interviewerTurn.text}"` });
-      } else {
-        setVoiceState("idle");
-      }
-    } catch (e) {
-      toast((e as Error).message, "error");
-      bv.current?.destroy();
-      hv.current?.disconnect();
-      bv.current = null;
-      hv.current = null;
-      if (engine !== "text") {
-        toast("Falling back to text mode.", "info");
-        setEngine("text");
-      }
+        hv.current = voice;
+        await voice.connect({ ...info, instructions: `${info.instructions}\n\nBegin the session by saying exactly this, then wait for the answer: "${result.interviewerTurn.text}"` });
+      } else { setVoiceState("idle"); }
+    } catch (error) {
+      if (room !== generation.current) return;
+      toast((error as Error).message, "error");
+      useTextMode();
+      if (sessionRef.current) toast("Your session is ready. Continue by typing below.", "info");
     } finally {
-      setStarting(false);
+      startingRef.current = false;
+      if (room === generation.current) setStarting(false);
     }
   };
 
   const toggleMute = () => {
-    const m = !muted;
-    setMuted(m);
-    if (engine === "browser" && bv.current) {
-      if (m) bv.current.stopListening();
-      else bv.current.listen();
+    const value = !mutedRef.current;
+    mutedRef.current = value;
+    setMuted(value);
+    if (engineRef.current === "browser") {
+      if (value) bv.current?.stopListening();
+      else if (!pendingCount.current && !startingRef.current && !playbackBusy.current) { bv.current?.idle(); bv.current?.listen(); }
     }
-    if (engine === "higgs" && hv.current) hv.current.setMuted(m);
+    hv.current?.setMuted(value || playbackBusy.current);
   };
 
   const replay = (text: string) => {
-    if (engine === "browser" && bv.current) {
-      bv.current.speak(text).then(() => !muted && bv.current?.listen());
-    }
+    if (endingRef.current || startingRef.current || pendingCount.current) return;
+    if (engineRef.current === "higgs") {
+      hv.current?.interrupt();
+      hv.current?.setMuted(true);
+      void speakLine(text).then(() => { if (!endingRef.current && !playbackBusy.current) hv.current?.setMuted(mutedRef.current); });
+    } else { void speakLine(text); }
   };
 
   const end = async () => {
-    const s = sessionRef.current;
-    if (!s) return;
+    const current = sessionRef.current;
+    if (!current || endingRef.current || startingRef.current) return;
+    hv.current?.flushTranscripts();
+    endingRef.current = true;
+    setEnding(true);
+    setBusy(true);
+    stopAudio();
+    bv.current?.stopListening();
+    hv.current?.disconnect();
     if (recorder.current) {
       const blob = await recorder.current.stop();
       recorder.current = null;
-      const said = turns.filter((t) => t.role === "expert").map((t) => t.text).join(" ");
+      const said = turns.filter((turn) => turn.role === "expert").map((turn) => turn.text).join(" ");
       if (blob && said.split(/\s+/).length >= 12) setReference({ blob, transcript: said.slice(0, 1200) });
     }
     bv.current?.destroy();
-    hv.current?.disconnect();
+    bv.current = null;
+    hv.current = null;
     setVoiceState("off");
-    setBusy(true);
     try {
-      const done = await api.endSession(s.id);
+      await pending.current;
+      const done = await api.endSession(current.id);
       sessionRef.current = done;
       setEnded(done);
       setCapture(await api.getCapture(id));
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+    } catch (error) {
+      toast((error as Error).message, "error");
+      endingRef.current = false;
+      useTextMode();
+    } finally { setBusy(false); setEnding(false); }
   };
 
   const cloneVoice = async () => {
@@ -260,15 +360,15 @@ export function InterviewRoom() {
   const domainName = (did?: string) => capture?.domains.find((d) => d.id === did)?.name;
   const first = capture?.expert.name.split(" ")[0] ?? "";
   const statusLine =
-    voiceState === "listening" ? `Listening to ${first}…` : voiceState === "thinking" ? "Tacit is thinking…" : voiceState === "speaking" ? "Tacit is speaking" : session ? (engine === "text" ? "Your turn — type below" : "Ready") : "";
+    ending ? "Saving your session…" : starting ? "Connecting voice…" : muted && engine !== "text" && voiceState !== "speaking" ? "Microphone muted" : voiceState === "listening" ? `Listening to ${first}…` : voiceState === "thinking" ? "Tacit is thinking…" : voiceState === "speaking" ? "Tacit is speaking" : session ? (engine === "text" ? "Your turn — type below" : "Ready") : "";
 
   if (!capture) return <div className="h-screen grid place-items-center text-muted">Loading…</div>;
 
   /* ────────────────────────── pre-flight ────────────────────────── */
   if (!session) {
     const options: { k: EngineKind; title: string; body: string; ok: boolean; why?: string }[] = [
-      { k: "higgs", title: "Higgs Realtime", body: "Speech-to-speech by Boson AI. Natural turn-taking, interruptions, ~0.7s latency.", ok: Boolean(health?.higgs), why: "Needs BOSON_API_KEY on the server" },
-      { k: "browser", title: "Browser voice", body: "Your browser's speech recognition and voice. No keys. Chrome works best.", ok: BrowserVoice.supported(), why: "Speech APIs unavailable in this browser" },
+      { k: "higgs", title: "Higgs Realtime", body: "Natural speech with live turn-taking. Speak freely or type your answer.", ok: Boolean(health?.higgs), why: "Natural voice is not connected for this workspace" },
+      { k: "browser", title: "Browser voice", body: "Speech recognition with natural spoken questions when connected. Chrome works best.", ok: BrowserVoice.supported(), why: "Speech APIs unavailable in this browser" },
       { k: "text", title: "Type answers", body: "Same interviewer, no microphone. Handy in a noisy room.", ok: true },
     ];
     return (
@@ -288,7 +388,8 @@ export function InterviewRoom() {
               <button
                 key={o.k}
                 disabled={!o.ok}
-                onClick={() => setEngine(o.k)}
+                onClick={() => { engineRef.current = o.k; setEngine(o.k); }}
+                aria-pressed={engine === o.k}
                 className={cx(
                   "rounded-2xl border p-4 text-left transition",
                   engine === o.k ? "border-accent bg-paper-2 shadow-lift" : "border-line bg-paper-2/50 hover:border-line-2",
@@ -305,6 +406,12 @@ export function InterviewRoom() {
             ))}
           </div>
 
+          {engine === "browser" && health?.higgs && ReferenceRecorder.supported() && (
+            <label className="mt-5 flex items-start gap-2 text-[13px] text-ink-2">
+              <input type="checkbox" checked={recordConsent} onChange={(event) => setRecordConsent(event.target.checked)} className="mt-1" />
+              <span>Save a voice sample for optional voice cloning. I am the speaker, or I have their permission to record and use their voice.</span>
+            </label>
+          )}
           <div className="mt-8 flex items-center gap-3">
             <Button variant="accent" size="lg" onClick={start} loading={starting} icon={<Mic className="h-4 w-4" />}>
               {starting ? "Connecting…" : "Begin session"}
@@ -331,8 +438,8 @@ export function InterviewRoom() {
           <Badge tone={engine === "higgs" ? "accent" : "neutral"}>{engine === "higgs" ? "Higgs Realtime" : engine === "browser" ? "Browser voice" : "Text"}</Badge>
           <Badge tone="sage">{pct(capture.stats.coverage)} covered</Badge>
           {!ended && (
-            <Button variant="danger" size="sm" onClick={end} loading={busy} icon={<Square className="h-3.5 w-3.5" />}>
-              End session
+            <Button variant="danger" size="sm" onClick={end} loading={ending} disabled={starting} icon={<Square className="h-3.5 w-3.5" />}>
+              {ending ? "Saving session…" : "End session"}
             </Button>
           )}
         </div>
@@ -349,8 +456,8 @@ export function InterviewRoom() {
                     <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted font-semibold">
                       Tacit
                       {t.kind && t.kind !== "opening" && <span className="rounded bg-paper-3 px-1.5 py-0.5 normal-case tracking-normal">{t.kind === "successor" ? "from the queue" : t.kind === "followup" ? "follow-up" : t.domainId ? domainName(t.domainId) : ""}</span>}
-                      {engine === "browser" && (
-                        <button onClick={() => replay(t.text)} className="ml-auto text-muted hover:text-ink" title="Replay">
+                      {!ended && (
+                        <button disabled={busy || starting} onClick={() => replay(t.text)} className="ml-auto text-muted hover:text-ink" title="Replay question" aria-label="Replay question">
                           <Volume2 className="h-3.5 w-3.5" />
                         </button>
                       )}
@@ -388,27 +495,30 @@ export function InterviewRoom() {
           <p className="h-5 text-[13px] text-ink-2">{ended ? "Session ended" : statusLine}</p>
           {!ended && engine !== "text" && (
             <div className="flex items-center gap-2">
-              <Button variant={muted ? "danger" : "secondary"} onClick={toggleMute} icon={muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}>
+              <Button variant={muted ? "danger" : "secondary"} onClick={toggleMute} disabled={starting} aria-pressed={muted} icon={muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}>
                 {muted ? "Unmute" : "Mute"}
               </Button>
+              <Button size="sm" onClick={useTextMode} disabled={starting} icon={<Keyboard className="h-4 w-4" />}>Use text</Button>
             </div>
+          )}
+          {!ended && engine === "text" && (health?.higgs || BrowserVoice.supported()) && (
+            <Button size="sm" disabled={busy || starting} loading={starting} onClick={() => {
+              engineRef.current = health?.higgs ? "higgs" : "browser";
+              setEngine(engineRef.current);
+              void start();
+            }} icon={<Mic className="h-4 w-4" />}>Retry voice</Button>
           )}
           {!ended && (
             <form
               className="mt-2 flex w-full items-center gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (engine === "higgs") {
-                  toast("Typed answers aren't wired into Higgs mode yet — just say it.", "info");
-                  return;
-                }
-                void submitExpert(typed);
-                setTyped("");
+                submitExpert(typed);
               }}
             >
               <Keyboard className="h-4 w-4 shrink-0 text-muted" />
-              <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={engine === "text" ? "Type your answer…" : "Or type instead…"} disabled={busy} />
-              <Button type="submit" variant="primary" size="sm" disabled={busy || !typed.trim()} icon={<Send className="h-3.5 w-3.5" />} aria-label="Send" />
+              <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={engine === "text" ? "Type your answer…" : "Or type instead…"} disabled={busy || starting} aria-label="Your answer" />
+              <Button type="submit" variant="primary" size="sm" disabled={busy || starting || !typed.trim()} icon={<Send className="h-3.5 w-3.5" />} aria-label="Send" />
             </form>
           )}
           <p className="text-center text-[11.5px] text-muted leading-relaxed">
@@ -487,7 +597,7 @@ export function InterviewRoom() {
           {reference && (
             <div className="rounded-xl border border-accent-2/60 bg-accent-3/40 p-3">
               <p className="text-[13px] text-ink">
-                <span className="font-medium">Let the twin speak in {first}'s voice.</span> Tacit recorded {Math.round(reference.blob.size / 8000)}s of {first} during this session. Higgs Audio can clone it so the successor hears answers the way {first} would say them.
+                <span className="font-medium">Let the twin speak in {first}'s voice.</span> Your permitted voice sample is ready. Higgs Audio can clone it so the successor hears answers the way {first} would say them.
               </p>
               <div className="mt-2 flex items-center gap-2">
                 {clonedVoice ? (

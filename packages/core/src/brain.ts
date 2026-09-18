@@ -20,6 +20,8 @@ export interface NextQuestionContext {
   successorQuestions: Question[];
   suggested: { domain: Domain; question: string } | null;
   isOpening: boolean;
+  /** Recently captured atoms, so the interviewer can refer back to them. */
+  memory?: Atom[];
 }
 
 export interface NextQuestion {
@@ -472,8 +474,9 @@ export class LLMBrain implements Brain {
           suggestedDomain: ctx.suggested?.domain ?? null,
           suggestedQuestion: ctx.suggested?.question ?? null,
           isOpening: ctx.isOpening,
+          memory: ctx.memory,
         }),
-        { maxTokens: 300, temperature: 0.6 },
+        { maxTokens: 320, temperature: 0.7 },
       );
       const say = String(r.say ?? "").trim();
       if (!say) throw new Error("empty question");

@@ -40,8 +40,12 @@ export class GestureMotion {
     if (mode === "zoom") {
       const d = Math.hypot(hands[0].palm.x - hands[1].palm.x, hands[0].palm.y - hands[1].palm.y);
       // Coincident/occluded hands are not a useful zoom input.
-      if (d >= 0.08 && this.separation !== null) result.zoom = clamp(this.separation / d, 0.94, 1.06);
-      this.separation = d >= 0.08 ? d : null;
+      if (d < 0.08) this.separation = null;
+      else if (this.separation === null) this.separation = d;
+      else if (Math.abs(this.separation / d - 1) > 0.003) {
+        result.zoom = clamp(this.separation / d, 0.94, 1.06);
+        this.separation = d;
+      }
     } else if (hand) {
       if (mode === "point" || mode === "pinch") result.pointer = mode === "pinch" ? hand.pinchPoint : hand.pointer;
       if (mode === "pinch" || mode === "orbit") {

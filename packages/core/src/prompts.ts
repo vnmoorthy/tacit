@@ -1,15 +1,19 @@
 import type { Atom, Capture, Domain, Question, Turn } from "./types.js";
 import { ATOM_TYPES } from "./types.js";
 
-export const INTERVIEWER_PERSONA = `You are Tacit, an AI knowledge-capture interviewer (say "I'm Tacit" — never claim to be the successor, a colleague, or a human). You interview experienced professionals who are leaving an organisation so their tacit knowledge — the procedures, rules of thumb, gotchas, contacts, and judgement calls that live only in their head — is preserved for their successor.
+export const INTERVIEWER_PERSONA = `You are Tacit, an AI knowledge-capture interviewer (say "I'm Tacit" if asked — never claim to be the successor, a colleague, or a human). You interview experienced professionals who are leaving an organisation so their tacit knowledge — the procedures, rules of thumb, gotchas, contacts, and judgement calls that live only in their head — is preserved for their successor.
 
-Style:
-- Warm, curious, concise. One question at a time. Never a list of questions.
-- Prefer concrete over abstract: ask for the last time it happened, the exact steps, the names of systems and people, the numbers.
-- Follow the thread when the expert says something surprising ("usually", "sometimes", "the trick is", "except when").
-- Probe for failure modes, exceptions, cut-offs, and who-to-call.
-- Acknowledge briefly (a few words), then ask. Do not summarise back at length.
-- Keep each reply under 45 words. Speak naturally; this will be read aloud.`;
+How you sound (this will be spoken aloud, so write the way a thoughtful person talks):
+- Warm, curious, unhurried. You genuinely find their work interesting, and it shows.
+- React to what they actually said before asking anything: pick out the specific detail that mattered ("Three-thirty, not five — that's exactly the kind of thing that never makes it into a manual.") One short reaction, then one question.
+- Vary your acknowledgements. Never open two turns the same way. No "Great question", no "Thank you for sharing".
+- Use their first name occasionally, not every turn.
+- Follow the thread when they say "usually", "sometimes", "depends", "the trick is", "except when": that's where the real knowledge is.
+- Prefer concrete over abstract: the last time it happened, the exact steps, the names of systems and people, the numbers, what went wrong.
+- If they hesitate or the answer is thin, make it easy: offer a starting point ("Take last quarter, for example…") rather than repeating the question.
+- If they go off on a tangent, let them finish, then bring it back with what you learned from the tangent.
+- Contractions, plain words, short sentences. A little dry humour is fine; sarcasm is not.
+- One question per turn. Keep each reply under 55 words.`
 
 export const LANGUAGES: { code: string; name: string }[] = [
   { code: "en-US", name: "English" },
@@ -77,6 +81,12 @@ Priorities: 1 critical, 2 important, 3 nice-to-have. Questions must be open, con
   ];
 }
 
+export function memoryBrief(atoms: Atom[], limit = 8): string {
+  if (!atoms.length) return "";
+  const recent = [...atoms].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  return `Things the expert has already told you (you may refer back to them naturally, e.g. "last time you mentioned…"):\n${recent.map((a) => `- (${a.type}) ${a.title}`).join("\n")}`;
+}
+
 export function nextQuestionPrompt(args: {
   capture: Capture;
   recentTurns: Turn[];
@@ -85,8 +95,9 @@ export function nextQuestionPrompt(args: {
   suggestedDomain: Domain | null;
   suggestedQuestion?: string | null;
   isOpening?: boolean;
+  memory?: Atom[];
 }) {
-  const { capture, recentTurns, lastAtoms, successorQuestions, suggestedDomain, suggestedQuestion, isOpening } = args;
+  const { capture, recentTurns, lastAtoms, successorQuestions, suggestedDomain, suggestedQuestion, isOpening, memory } = args;
   const transcript = recentTurns.map((t) => `${t.role === "expert" ? capture.expert.name.split(" ")[0] : "Tacit"}: ${t.text}`).join("\n");
   return [
     { role: "system" as const, content: INTERVIEWER_PERSONA },
@@ -99,13 +110,14 @@ ${coverageBrief(capture.domains)}
 
 ${successorQuestions.length ? `Questions the successor has already asked the knowledge base and could not get answered (ask these first, in the expert's language):\n${successorQuestions.map((q) => `- [${q.id}] ${q.text}`).join("\n")}\n` : ""}
 ${lastAtoms.length ? `Knowledge just captured from the last answer:\n${lastAtoms.map((a) => `- (${a.type}) ${a.title}`).join("\n")}\n` : ""}
+${memory?.length ? `${memoryBrief(memory)}\n` : ""}
 Recent transcript:
 ${transcript || "(session just started)"}
 
 ${suggestedDomain ? `The planner suggests domain [${suggestedDomain.id}] "${suggestedDomain.name}"${suggestedQuestion ? ` with the question: "${suggestedQuestion}"` : ""} if the current thread is exhausted.` : ""}
-${isOpening ? `This is the very first turn of the session: greet ${capture.expert.name.split(" ")[0]} in one short sentence as Tacit (you are the AI interviewer, not ${capture.successor?.name ?? "the successor"}), say in one short sentence that you're capturing what they know${capture.successor ? ` for ${capture.successor.name}` : ""}, then ask the first question${suggestedQuestion ? ` — use the planner's suggested question` : ""}.` : ""}
+${isOpening ? `This is the very first turn of the session: greet ${capture.expert.name.split(" ")[0]} warmly in one short sentence as Tacit (you are the AI interviewer, not ${capture.successor?.name ?? "the successor"})${memory?.length ? `, mention in a few words that you remember what they covered last time` : `, say in a few words that you're capturing what they know${capture.successor ? ` for ${capture.successor.name}` : ""}`}, then ask the first question${suggestedQuestion ? ` — use the planner's suggested question, in your own words` : ""}.` : ""}
 Decide the single best next thing to say.${!isEnglish(capture.expert.language) ? ` Write "say" in ${languageName(capture.expert.language)}.` : ""} Reply with JSON only:
-{"say":"<what you say, under 45 words, one question>","kind":"followup"|"new"|"successor","domainId":"<domain id>","questionId":"<successor question id if kind=successor, else null>"}`,
+{"say":"<a short reaction to what they said, then one question; under 55 words; spoken language>","kind":"followup"|"new"|"successor","domainId":"<domain id>","questionId":"<successor question id if kind=successor, else null>"}`,
     },
   ];
 }

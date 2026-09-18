@@ -35,6 +35,11 @@ describe("gesture analysis", () => {
     const h = analyseHand(hand({ index: "curled", others: "curled" }) as any, "Right");
     expect(h.fist).toBe(true);
   });
+  it("keeps a closed fist as hold even when the thumb touches the curled index", () => {
+    const h = analyseHand(hand({ index: "curled", others: "curled", thumbToIndex: true }) as any, "Right");
+    expect(h.fist).toBe(true);
+    expect(h.pinch).toBe(false);
+  });
   it("detects a pinch and mirrors coordinates", () => {
     const h = analyseHand(hand({ index: "up", others: "up", thumbToIndex: true }) as any, "Right");
     expect(h.pinch).toBe(true);

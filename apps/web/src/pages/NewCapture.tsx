@@ -130,7 +130,7 @@ export function NewCapture() {
 
   return (
     <div className="max-w-3xl">
-      <PageHeader eyebrow="New capture" title="Who is leaving, and what do they carry?" lede="Tacit plans a coverage map of knowledge domains from the role and context, then interviews the expert against it." />
+      <PageHeader eyebrow="New capture" title="Who is leaving, and what do they carry?" lede="One capture per expert. Add their role and responsibilities so Tacit can plan the interview topics and track coverage." />
 
       <div className="mt-5 flex flex-wrap items-center gap-2 text-[13px]">
         <span className="text-muted">Try an example:</span>
@@ -163,11 +163,11 @@ export function NewCapture() {
               <Field label="Years in role">
                 <Input type="number" min={0} max={80} value={f.tenure} onChange={set("tenure")} placeholder="19" />
               </Field>
-              <Field label="Last day">
+              <Field label="Last day" hint={`If blank, defaults to ${defaultDeparture()}.`}>
                 <Input type="date" value={f.departure} onChange={set("departure")} />
               </Field>
             </div>
-            <Field label="Interview language" hint="The expert is interviewed in their language; the knowledge base is always written in English." className="md:col-span-2">
+            <Field label="Interview language" hint="With an AI model, knowledge is summarized in English and source quotes retain the original language. Offline mode does not translate." className="md:col-span-2">
               <Select value={f.language} onChange={set("language")}>
                 {LANGUAGES.map((l) => (
                   <option key={l.code} value={l.code}>
@@ -203,7 +203,7 @@ export function NewCapture() {
             Cancel
           </Button>
           <Button type="submit" variant="primary" size="lg" loading={busy} icon={busy ? undefined : <Sparkles className="h-4 w-4" />}>
-            {busy ? "Planning coverage map…" : "Plan the capture"}
+            {busy ? "Planning interview…" : "Create capture"}
             {!busy && <ArrowRight className="h-4 w-4" />}
           </Button>
         </div>

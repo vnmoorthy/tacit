@@ -11,7 +11,8 @@ import { useApi, useApp } from "../lib/store.js";
 function riskTone(days: number | null): { tone: "danger" | "amber" | "neutral"; label: string } {
   if (days === null) return { tone: "neutral", label: "No date set" };
   if (days < 0) return { tone: "neutral", label: "Departed" };
-  if (days <= 30) return { tone: "danger", label: `${days} days left` };
+  if (days === 0) return { tone: "danger", label: "Leaves today" };
+  if (days <= 30) return { tone: "danger", label: `${days} ${days === 1 ? "day" : "days"} left` };
   if (days <= 90) return { tone: "amber", label: `${days} days left` };
   return { tone: "neutral", label: `${days} days left` };
 }
@@ -20,7 +21,7 @@ export function CaptureCard({ c }: { c: Capture }) {
   const days = daysUntil(c.expert.departureDate);
   const risk = riskTone(days);
   return (
-    <Link to={`/c/${c.id}`} className="group block">
+    <Link to={`/c/${c.id}`} className="group block min-w-0">
       <Card className="h-full p-5 transition hover:-translate-y-0.5 hover:border-line-2 hover:shadow-lift">
         <div className="flex items-start gap-3">
           <Avatar name={c.expert.name} size={44} />
@@ -46,12 +47,12 @@ export function CaptureCard({ c }: { c: Capture }) {
           </div>
           <div>
             <div className={cx("font-display text-[20px] leading-none", c.stats.openQuestions ? "text-accent" : "")}>{c.stats.openQuestions}</div>
-            <div className="mt-1 text-[11px] uppercase tracking-wider text-muted">open</div>
+            <div className="mt-1 text-[11px] uppercase tracking-wider text-muted">questions</div>
           </div>
         </div>
         <div className="mt-3 flex items-center justify-between text-[12.5px] text-muted">
           <span>Updated {fmtRelative(c.updatedAt)}</span>
-          <span className="inline-flex items-center gap-1 font-medium text-ink opacity-0 transition group-hover:opacity-100">
+          <span className="inline-flex items-center gap-1 font-medium text-ink opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
             Open <ArrowRight className="h-3.5 w-3.5" />
           </span>
         </div>
@@ -66,8 +67,13 @@ export function Dashboard() {
   const nav = useNavigate();
   const [captures, setCaptures] = useState<Capture[] | null>(null);
   const [loadingSamples, setLoadingSamples] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const refresh = () => api.listCaptures().then(setCaptures);
+  const refresh = async () => {
+    setError(null);
+    try { setCaptures(await api.listCaptures()); }
+    catch (e) { setError((e as Error).message); }
+  };
   useEffect(() => {
     void refresh();
   }, [api]);
@@ -149,8 +155,10 @@ export function Dashboard() {
         >
           Captures
         </SectionTitle>
-        {captures === null ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {error ? (
+          <EmptyState title="Captures couldn't load" body={error} action={<Button onClick={() => void refresh()}>Try again</Button>} />
+        ) : captures === null ? (
+          <div role="status" aria-label="Loading captures" className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <div key={i} className="h-44 animate-pulse rounded-2xl bg-paper-2" />
             ))}
@@ -159,7 +167,7 @@ export function Dashboard() {
           <EmptyState
             icon={<Sparkles className="h-5 w-5" />}
             title="No captures yet"
-            body="Create a capture for an expert who is leaving, or load two sample captures (a payroll lead and an SRE) to see Tacit with real knowledge already in it."
+            body="Create a capture for an expert, or load fictional sample interviews to explore a ready-made knowledge base."
             action={
               <>
                 <Button onClick={loadSamples} loading={loadingSamples} icon={<Database className="h-4 w-4" />}>
@@ -172,7 +180,7 @@ export function Dashboard() {
             }
           />
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {list.map((c) => (
               <CaptureCard key={c.id} c={c} />
             ))}

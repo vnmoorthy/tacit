@@ -58,7 +58,7 @@ export function saveSettings(s: LocalSettings) {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
   } catch {
-    /* ignore */
+    throw new Error("This browser could not save your settings. Check available storage and browser permissions, then try again.");
   }
 }
 
@@ -66,7 +66,7 @@ export function clearLocalData() {
   try {
     localStorage.removeItem(DB_KEY);
   } catch {
-    /* ignore */
+    throw new Error("This browser could not delete its saved captures. Check browser storage permissions, then try again.");
   }
 }
 
@@ -97,16 +97,18 @@ export function createLocalClient(): ApiClient {
   } catch {
     /* corrupt data — start fresh */
   }
-  let timer: number | null = null;
-  store.onChange = () => {
-    if (timer) window.clearTimeout(timer);
-    timer = window.setTimeout(async () => {
+  // A successful mutation must be durable before the UI navigates or reloads.
+  // Debouncing this write lost entire new captures when the page closed quickly.
+  const save = async <T>(operation: Promise<T>): Promise<T> => {
+    try {
+      return await operation;
+    } finally {
       try {
         localStorage.setItem(DB_KEY, JSON.stringify(await store.snapshot()));
-      } catch (e) {
-        console.warn("[tacit] could not persist local data", e);
+      } catch {
+        throw new Error("This browser could not save your changes. Keep this tab open and export your capture before clearing space or changing browser settings.");
       }
-    }, 250);
+    }
   };
   const engine = new Engine({ store, brain, embedder, voice: { higgs: false, browser: true } });
   const mode: ApiMode = "local";
@@ -125,32 +127,32 @@ export function createLocalClient(): ApiClient {
       };
     },
     listCaptures: () => engine.listCaptures(),
-    createCapture: (input: CreateCaptureInput) => engine.createCapture(input),
+    createCapture: (input: CreateCaptureInput) => save(engine.createCapture(input)),
     getCapture: (id: string) => engine.getCapture(id),
-    updateCapture: (id: string, patch: Partial<Pick<Capture, "title" | "expert" | "successor" | "context" | "status" | "voiceId">>) => engine.updateCapture(id, patch),
-    deleteCapture: (id: string) => engine.deleteCapture(id),
+    updateCapture: (id: string, patch: Partial<Pick<Capture, "title" | "expert" | "successor" | "context" | "status" | "voiceId">>) => save(engine.updateCapture(id, patch)),
+    deleteCapture: (id: string) => save(engine.deleteCapture(id)),
     exportCapture: (id: string) => engine.exportCapture(id),
     handover: (id: string) => engine.handover(id),
     graph: (id: string) => engine.graph(id),
     instructions: (id: string) => engine.interviewerInstructions(id),
     listSessions: (id: string) => engine.listSessions(id),
-    startSession: (id: string, m: SessionMode) => engine.startSession(id, m),
+    startSession: (id: string, m: SessionMode) => save(engine.startSession(id, m)),
     getSession: (sid: string) => engine.getSession(sid),
-    expertTurn: (sid: string, text: string, generateNext = true) => engine.expertTurn(sid, text, { generateNext }),
-    interviewerTurn: (sid: string, text: string, meta: { kind?: Turn["kind"]; domainId?: string } = {}) => engine.interviewerTurn(sid, text, meta),
-    endSession: (sid: string) => engine.endSession(sid),
+    expertTurn: (sid: string, text: string, generateNext = true) => save(engine.expertTurn(sid, text, { generateNext })),
+    interviewerTurn: (sid: string, text: string, meta: { kind?: Turn["kind"]; domainId?: string } = {}) => save(engine.interviewerTurn(sid, text, meta)),
+    endSession: (sid: string) => save(engine.endSession(sid)),
     listAtoms: (id: string, filter: AtomFilter = {}) => engine.listAtoms(id, filter),
-    updateAtom: (aid: string, patch: Partial<Pick<Atom, "title" | "content" | "type" | "tags" | "verified" | "domainId">>) => engine.updateAtom(aid, patch),
-    deleteAtom: (aid: string) => engine.deleteAtom(aid),
-    ask: (id: string, q: string, askedBy?: string) => engine.ask(id, q, askedBy),
+    updateAtom: (aid: string, patch: Partial<Pick<Atom, "title" | "content" | "type" | "tags" | "verified" | "domainId">>) => save(engine.updateAtom(aid, patch)),
+    deleteAtom: (aid: string) => save(engine.deleteAtom(aid)),
+    ask: (id: string, q: string, askedBy?: string) => save(engine.ask(id, q, askedBy)),
     listQuestions: (id: string) => engine.listQuestions(id),
-    addQuestion: (id: string, text: string, askedBy?: string, domainId?: string) => engine.addQuestion(id, text, "successor", askedBy, domainId),
-    updateQuestion: (qid: string, patch: Partial<Pick<Question, "text" | "status" | "domainId">>) => engine.updateQuestion(qid, patch),
+    addQuestion: (id: string, text: string, askedBy?: string, domainId?: string) => save(engine.addQuestion(id, text, "successor", askedBy, domainId)),
+    updateQuestion: (qid: string, patch: Partial<Pick<Question, "text" | "status" | "domainId">>) => save(engine.updateQuestion(qid, patch)),
     async loadSamples(key?: string) {
       const specs = key ? SAMPLES.filter((s) => s.key === key) : SAMPLES;
       const out: Capture[] = [];
       for (const s of specs) out.push(await engine.importBundle(buildSample(s)));
-      return out;
+      return save(Promise.resolve(out));
     },
     async higgsSession(): Promise<HiggsSessionInfo> {
       throw new Error("Higgs Realtime needs the Tacit server with BOSON_API_KEY configured.");

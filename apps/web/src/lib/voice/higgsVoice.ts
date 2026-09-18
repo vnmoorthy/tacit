@@ -8,6 +8,7 @@ import type { VoiceEvents, VoiceState } from "./types.js";
 
 export interface HiggsEvents extends VoiceEvents {
   onUserTranscript(text: string): void;
+  onUserPartial?(text: string): void;
   onAssistantTranscript(text: string): void;
   onAssistantPartial(text: string): void;
   onDisconnect?(message: string): void;
@@ -81,6 +82,8 @@ export class HiggsVoice {
   private interruptedResponses = new Set<string>();
   private responseId = "";
   private userItems = new Map<string, string>();
+  private pendingUsers = new Map<string, string>();
+  private anonymousUser = 0;
   private assistantItems = new Set<string>();
 
   constructor(private ev: HiggsEvents) {}
@@ -151,7 +154,9 @@ export class HiggsVoice {
           try {
             const event = JSON.parse(message.data as string);
             if (!ready && event.type === "error") return fail(event.error?.message ?? event.message ?? "Voice setup failed.");
-            if (!ready && event.type === "session.updated") {
+            // Boson confirms its initial configuration with session.created;
+            // compatible realtime servers can also send session.updated.
+            if (!ready && (event.type === "session.created" || event.type === "session.updated")) {
               ready = true;
               clearTimeout(timeout);
               this.cancelConnect = null;
@@ -206,31 +211,42 @@ export class HiggsVoice {
     if (this.state === "listening" || this.state === "idle") this.setState(muted ? "idle" : "listening");
   }
 
-  private emitUserTranscript(event: any) {
-    const raw = String(event.transcript ?? "").trim();
-    if (!raw) return;
-    const key = String(event.item_id ?? event.event_id ?? "");
-    const previous = key ? this.userItems.get(key) : undefined;
-    if (previous === raw) return;
-    // A provider can update a transcript for the same item. Preserve short answers
-    // and repeated words in distinct turns; never deduplicate across speakers' turns.
-    const text = previous && raw.startsWith(previous) ? raw.slice(previous.length).trim() : raw;
-    if (key) this.userItems.set(key, raw);
+  private receiveUserTranscript(event: any) {
+    const text = String(event.transcript ?? "").trim();
+    if (!text) return;
+    const key = String(event.item_id ?? event.event_id ?? `anonymous_${++this.anonymousUser}`);
+    if (this.userItems.get(key) === text) return;
+    // Boson revises one item several times while semantic VAD continues a thought.
+    // Revisions can change earlier punctuation/numbers; persist only the final item.
+    this.pendingUsers.set(key, text);
+    this.ev.onUserPartial?.([...this.pendingUsers.values()].join(" "));
+  }
+
+  /** Preserve a completed thought once, including when the user ends/disconnects. */
+  flushTranscripts() {
+    for (const [key, text] of this.pendingUsers) {
+      if (!this.userItems.has(key)) this.ev.onUserTranscript(text);
+      this.userItems.set(key, text);
+    }
+    this.pendingUsers.clear();
+    this.ev.onUserPartial?.("");
     if (this.userItems.size > 100) this.userItems.delete(this.userItems.keys().next().value!);
-    if (text) this.ev.onUserTranscript(text);
   }
 
   private handle(event: any) {
-    if (event.response_id && this.interruptedResponses.has(event.response_id)) return;
+    const responseId = event.response_id ?? event.response?.id;
+    if (event.type !== "response.created" && responseId && this.interruptedResponses.has(responseId)) return;
     switch (event.type) {
       case "response.created":
         this.responseActive = true;
         this.responseId = event.response?.id ?? "";
+        this.interruptedResponses.delete(this.responseId);
         this.assistantBuf = "";
         this.setState("thinking");
         break;
       case "input_audio_buffer.speech_started":
-        this.interrupt();
+        // Semantic VAD already cancels the server response. A second cancel races it.
+        this.interrupt(false);
         this.setState(this.muted ? "idle" : "listening");
         break;
       case "input_audio_buffer.speech_stopped":
@@ -238,7 +254,7 @@ export class HiggsVoice {
         if (!this.muted) this.setState("thinking");
         break;
       case "conversation.item.input_audio_transcription.completed":
-        this.emitUserTranscript(event);
+        this.receiveUserTranscript(event);
         break;
       case "conversation.item.input_audio_transcription.failed":
         this.ev.onError("That answer could not be transcribed. Please repeat it or type below.");
@@ -255,6 +271,7 @@ export class HiggsVoice {
         break;
       case "response.output_audio_transcript.done":
       case "response.audio_transcript.done": {
+        this.flushTranscripts();
         const text = String(event.transcript ?? this.assistantBuf).trim();
         const key = `${event.item_id ?? event.response_id ?? this.responseId}:${event.content_index ?? 0}`;
         this.assistantBuf = "";
@@ -266,6 +283,7 @@ export class HiggsVoice {
         break;
       }
       case "response.done":
+        this.flushTranscripts();
         this.responseActive = false;
         this.assistantBuf = "";
         this.ev.onAssistantPartial("");
@@ -273,6 +291,8 @@ export class HiggsVoice {
         if (!this.sources.length) this.setState(this.muted ? "idle" : "listening");
         break;
       case "error":
+        if (event.error?.code === "response_cancel_not_active" || /no active response to cancel/i.test(event.error?.message ?? "")) break;
+        this.flushTranscripts();
         this.ev.onError(event.message ?? event.error?.message ?? "Voice service error. Try again or continue by typing.");
         if (!this.sources.length) this.setState(this.muted ? "idle" : "listening");
         break;
@@ -298,10 +318,10 @@ export class HiggsVoice {
     this.speakingTimer = window.setTimeout(() => this.setState(this.muted ? "idle" : "listening"), Math.max(50, (this.playhead - this.ctx.currentTime) * 1000 + 80));
   }
 
-  interrupt() {
+  interrupt(cancelServerResponse = true) {
     if (this.responseActive) {
       if (this.responseId) this.interruptedResponses.add(this.responseId);
-      this.send({ type: "response.cancel" });
+      if (cancelServerResponse) this.send({ type: "response.cancel" });
       this.responseActive = false;
     }
     this.stopPlayback();
@@ -320,6 +340,7 @@ export class HiggsVoice {
   }
 
   disconnect() {
+    this.flushTranscripts();
     this.generation++;
     this.cancelConnect?.();
     this.cancelConnect = null;
@@ -340,6 +361,7 @@ export class HiggsVoice {
     this.assistantBuf = "";
     this.responseId = "";
     this.userItems.clear();
+    this.pendingUsers.clear();
     this.assistantItems.clear();
     this.interruptedResponses.clear();
     this.ev.onLevel(0);

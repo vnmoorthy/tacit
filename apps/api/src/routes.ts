@@ -140,7 +140,7 @@ export function buildRoutes(engine: Engine, meta: { version: string; notes: stri
     if (!apiKey) return c.json({ error: "BOSON_API_KEY is not configured on the server" }, 409);
     const { captureId } = await body(c, z.object({ captureId: z.string().min(1) }));
     const instructions = await engine.interviewerInstructions(captureId);
-    const session = await createHiggsSession({ apiKey, instructions, voice: env("BOSON_VOICE", "default"), baseUrl: env("BOSON_BASE_URL") || undefined });
+    const session = await createHiggsSession({ apiKey, instructions, voice: env("BOSON_VOICE", "nora"), baseUrl: env("BOSON_BASE_URL") || undefined });
     return c.json(session);
   });
 
@@ -151,7 +151,7 @@ export function buildRoutes(engine: Engine, meta: { version: string; notes: stri
     const { text, voice, captureId } = await body(c, z.object({ text: z.string().min(1).max(4000), voice: z.string().max(200).optional(), captureId: z.string().optional() }));
     let v = voice;
     if (!v && captureId) v = (await engine.getCapture(captureId)).voiceId;
-    const { bytes, contentType } = await higgsSpeech({ apiKey, text, voice: v || env("BOSON_VOICE", "default"), baseUrl: env("BOSON_BASE_URL") || undefined });
+    const { bytes, contentType } = await higgsSpeech({ apiKey, text, voice: v || env("BOSON_VOICE", "nora"), baseUrl: env("BOSON_BASE_URL") || undefined });
     return new Response(bytes, { headers: { "content-type": contentType, "cache-control": "no-store", "x-tacit-voice": v || "default" } });
   });
 

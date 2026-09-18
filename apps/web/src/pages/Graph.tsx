@@ -14,8 +14,9 @@ import { Badge, Button, cx } from "../components/ui.js";
 import { useApi, useApp } from "../lib/store.js";
 import { HandTracker, drawHands, type HandFrame } from "../lib/vision/handTracker.js";
 import { GestureMotion, cameraViewport } from "../lib/vision/gestureMotion.js";
+import { framePoints } from "../lib/vision/framing.js";
 import { BrowserVoice } from "../lib/voice/browserVoice.js";
-import { BlobPlayer } from "../lib/voice/player.js";
+import { SpokenAudio } from "../lib/voice/spokenAudio.js";
 
 type FGNode = GraphNode & { x?: number; y?: number; z?: number; fx?: number; fy?: number; fz?: number };
 type FGLink = GraphLink & { source: FGNode | string; target: FGNode | string };
@@ -76,14 +77,19 @@ export function Graph() {
   const motion = useRef(new GestureMotion());
   const tracker = useRef<HandTracker | null>(null);
   const fullOverlayRef = useRef<HTMLCanvasElement>(null);
-  const immersiveRef = useRef<{ tex: any } | null>(null);
   const [immersive, setImmersive] = useState(true);
   const immersiveOn = useRef(true);
   const mounted = useRef(true);
   const fitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialFitPending = useRef(true);
   const reducedMotion = useRef(typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const voice = useRef<BrowserVoice | null>(null);
-  const player = useRef(new BlobPlayer());
+  const speaker = useRef<SpokenAudio | null>(null);
+  const utteranceHandler = useRef<(text: string) => Promise<void>>(async () => {});
+  const askBusy = useRef(false);
+  const requestEpoch = useRef(0);
+  const voiceEpoch = useRef(0);
+  const micStarting = useRef(false);
 
   const [capture, setCapture] = useState<Capture | null>(null);
   const [data, setData] = useState<GraphData | null>(null);
@@ -106,6 +112,7 @@ export function Graph() {
   const [recording, setRecording] = useState(false);
   const recorder = useRef<MediaRecorder | null>(null);
   const recChunks = useRef<Blob[]>([]);
+  const recordingCleanup = useRef<(() => void) | null>(null);
   const say = (text: string) => {
     setHud(text);
     window.clearTimeout(hudTimer.current);
@@ -121,12 +128,15 @@ export function Graph() {
 
   /* ───────────────────────── data ───────────────────────── */
   useEffect(() => {
+    let cancelled = false;
     Promise.all([api.getCapture(id), api.graph(id)])
       .then(([c, g]) => {
+        if (cancelled) return;
         setCapture(c);
         setData(g);
       })
-      .catch((e) => toast((e as Error).message, "error"));
+      .catch((e) => { if (!cancelled) { setGraphError((e as Error).message); toast((e as Error).message, "error"); } });
+    return () => { cancelled = true; };
   }, [api, id, toast]);
 
   /* ───────────────────────── styling ───────────────────────── */
@@ -151,7 +161,7 @@ export function Graph() {
     g.nodeThreeObject((n: FGNode) => {
       const active = !hl.active || hl.nodes.has(n.id) || selectedRef.current === n.id || hoverRef.current === n.id;
       const color = COLORS[n.group] ?? "#cccccc";
-      const radius = Math.cbrt(n.val) * 2.8;
+      const radius = Math.cbrt(n.val) * 3.8;
       const group = new THREE.Group();
       const material = new THREE.MeshPhysicalMaterial({
         color, metalness: 0.28, roughness: 0.28, clearcoat: 0.9, clearcoatRoughness: 0.18,
@@ -169,7 +179,7 @@ export function Graph() {
         const text = n.label.length > 36 ? `${n.label.slice(0, 35)}…` : n.label;
         const label = new SpriteText(text);
         label.color = n.kind === "domain" ? "#f6e3c3" : n.kind === "entity" ? color : "#f6f1e9";
-        label.textHeight = n.kind === "domain" ? 3.8 : n.kind === "entity" ? 2.6 : 2.9;
+        label.textHeight = n.kind === "domain" ? 6.6 : n.kind === "entity" ? 4.4 : 5.2;
         label.fontFace = n.kind === "domain" ? "Georgia, serif" : "Inter, sans-serif";
         label.backgroundColor = "rgba(14,18,23,0.82)";
         label.padding = 1.4;
@@ -210,24 +220,27 @@ export function Graph() {
     [applyStyles],
   );
 
-  const flyTo = useCallback((ids: string[], distance = 120, ms = 1300) => {
+  const frame = useCallback((points: FGNode[], minDistance = 90, ms = 900, withPanel = false) => {
     const g = graphRef.current;
-    if (!g) return;
-    const pts = nodesRef.current.filter((n) => ids.includes(n.id) && n.x !== undefined);
-    if (!pts.length) return;
-    const c = { x: 0, y: 0, z: 0 };
-    for (const p of pts) {
-      c.x += p.x! / pts.length;
-      c.y += p.y! / pts.length;
-      c.z += p.z! / pts.length;
-    }
-    const cam = g.cameraPosition();
-    const dx = cam.x - c.x;
-    const dy = cam.y - c.y;
-    const dz = cam.z - c.z;
-    const len = Math.hypot(dx, dy, dz) || 1;
-    g.cameraPosition({ x: c.x + (dx / len) * distance, y: c.y + (dy / len) * distance, z: c.z + (dz / len) * distance }, c, reducedMotion.current ? 0 : ms);
+    const el = containerRef.current;
+    if (!g || !el) return;
+    const pts = points.filter((n) => Number.isFinite(n.x) && Number.isFinite(n.y) && Number.isFinite(n.z)) as (FGNode & { x: number; y: number; z: number })[];
+    const camera = g.camera();
+    camera.updateMatrixWorld();
+    const m = camera.matrixWorld.elements;
+    const framing = framePoints(pts, {
+      right: { x: m[0], y: m[1], z: m[2] }, up: { x: m[4], y: m[5], z: m[6] }, back: { x: m[8], y: m[9], z: m[10] },
+      width: el.clientWidth, height: el.clientHeight, fov: camera.fov,
+      panelWidth: withPanel && el.clientWidth >= 768 ? 392 : 0, minDistance,
+    });
+    if (framing) g.cameraPosition(framing.position, framing.target, reducedMotion.current ? 0 : ms);
   }, []);
+
+  const flyTo = useCallback((ids: string[], distance = 120, ms = 1000, withPanel = true) => {
+    initialFitPending.current = false;
+    if (fitTimer.current) clearTimeout(fitTimer.current);
+    frame(nodesRef.current.filter((n) => ids.includes(n.id)), distance, ms, withPanel);
+  }, [frame]);
 
   const select = useCallback(
     (n: FGNode | null) => {
@@ -250,10 +263,11 @@ export function Graph() {
     setGraphError(null);
     let ro: ResizeObserver | null = null;
     (async () => {
-      const [{ default: ForceGraph3D }, THREE, { UnrealBloomPass }] = await Promise.all([
+      const [{ default: ForceGraph3D }, THREE, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
         import("3d-force-graph"),
         import("three"),
         import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
+        import("three/examples/jsm/postprocessing/OutputPass.js"),
       ]);
       if (disposed || !containerRef.current) return;
       const el = containerRef.current;
@@ -263,13 +277,15 @@ export function Graph() {
       linksRef.current = links;
       const g = new (ForceGraph3D as any)(el, { controlType: "orbit" });
       graphRef.current = g;
-      g.backgroundColor("#0e1013")
+      g.backgroundColor("#000000")
         .showNavInfo(false)
         .width(el.clientWidth)
         .height(el.clientHeight)
+        .warmupTicks(100)
+        .cooldownTicks(80)
         .nodeId("id")
         .nodeVal("val")
-        .nodeRelSize(2.8)
+        .nodeRelSize(3.8)
         .nodeOpacity(0.96)
         .nodeResolution(20)
         .nodeThreeObjectExtend(false)
@@ -286,7 +302,7 @@ export function Graph() {
         })
         .onBackgroundClick(() => select(null))
         .graphData({ nodes, links });
-      g.d3Force("charge").strength(-140);
+      g.d3Force("charge").strength(-95).distanceMax(180);
       g.d3Force("link").distance((l: FGLink) => (l.kind === "in" ? 42 : l.kind === "mentions" ? 34 : 64));
       const renderer = g.renderer();
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
@@ -301,6 +317,7 @@ export function Graph() {
       g.controls().dampingFactor = 0.12;
       const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.24, 0.4, 0.8);
       g.postProcessingComposer().addPass(bloom);
+      g.postProcessingComposer().addPass(new OutputPass());
       ro = new ResizeObserver(() => {
         g.width(el.clientWidth).height(el.clientHeight);
         bloom.setSize(el.clientWidth, el.clientHeight);
@@ -308,18 +325,14 @@ export function Graph() {
       ro.observe(el);
       await applyStyles();
       if (disposed) return;
-      let fitted = false;
-      g.onEngineStop(() => {
-        if (fitted) return;
-        fitted = true;
-        g.zoomToFit(reducedMotion.current ? 0 : 900, 65);
-      });
-      fitTimer.current = setTimeout(() => {
-        if (!disposed && !fitted) {
-          fitted = true;
-          g.zoomToFit(reducedMotion.current ? 0 : 900, 65);
-        }
-      }, 2500);
+      initialFitPending.current = true;
+      const fitInitial = () => {
+        if (disposed || !initialFitPending.current) return;
+        initialFitPending.current = false;
+        frame(nodesRef.current, 90, 650);
+      };
+      g.onEngineStop(fitInitial);
+      fitTimer.current = setTimeout(fitInitial, 80);
       setReady(true);
     })().catch((e) => {
       if (disposed) return;
@@ -337,7 +350,7 @@ export function Graph() {
       }
       graphRef.current = null;
     };
-  }, [data, applyStyles, select, toast]);
+  }, [data, applyStyles, select, frame, toast]);
 
   /* ───────────────────────── gestures ───────────────────────── */
   const nearestNode = (px: number, py: number, radius: number): FGNode | null => {
@@ -360,6 +373,7 @@ export function Graph() {
   const orbit = (dAz: number, dPolar: number, scale = 1) => {
     const g = graphRef.current;
     if (!g) return;
+    initialFitPending.current = false;
     const pos = g.cameraPosition();
     const target = g.controls()?.target ?? { x: 0, y: 0, z: 0 };
     const dx = pos.x - target.x;
@@ -382,26 +396,18 @@ export function Graph() {
     }
   };
 
-  /** The real camera lives in a contained video layer, with matching landmark coordinates. */
-  const enterImmersive = async () => {
+  /** The real camera sits behind the graph with matching, undistorted coordinates. */
+  const enterImmersive = () => {
     const g = graphRef.current;
     if (!g || !tracker.current?.running || !immersiveOn.current) return;
-    // Keep recording support: the graph canvas uses the same video texture.
-    const THREE = await import("three");
-    if (!mounted.current || graphRef.current !== g || !tracker.current?.running || !immersiveOn.current || immersiveRef.current) return;
-    const tex = new THREE.VideoTexture(videoRef.current!);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.repeat.x = -1;
-    immersiveRef.current = { tex };
-    // CSS video preserves aspect ratio; a transparent renderer keeps the real feed crisp.
     g.backgroundColor("rgba(14,16,19,0)");
+    // Bloom passes have an opaque black output; screen blending preserves the real camera below.
+    g.renderer().domElement.style.mixBlendMode = "screen";
   };
 
   const exitImmersive = () => {
-    immersiveRef.current?.tex.dispose();
-    immersiveRef.current = null;
-    graphRef.current?.backgroundColor("#0e1013");
+    graphRef.current?.backgroundColor("#000000");
+    if (graphRef.current) graphRef.current.renderer().domElement.style.mixBlendMode = "normal";
     const cv = fullOverlayRef.current;
     if (cv) cv.getContext("2d")?.clearRect(0, 0, cv.width, cv.height);
   };
@@ -420,7 +426,14 @@ export function Graph() {
 
   const onFrame = (f: HandFrame) => {
     const cv = overlayRef.current;
-    if (cv) drawHands(cv.getContext("2d")!, f.hands, cv.width, cv.height);
+    if (cv) {
+      const ctx = cv.getContext("2d")!;
+      const view = cameraViewport(cv.width, cv.height, videoRef.current?.videoWidth ?? 640, videoRef.current?.videoHeight ?? 480);
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.save(); ctx.translate(view.x, view.y);
+      drawHands(ctx, f.hands, view.width, view.height);
+      ctx.restore();
+    }
     const full = fullOverlayRef.current;
     const el = containerRef.current;
     const g = graphRef.current;
@@ -511,9 +524,9 @@ export function Graph() {
     void applyStyles();
   };
 
-  const toggleCamera = async () => {
+  const toggleCamera = async (opts: { silent?: boolean } = {}) => {
     if (tracker.current) { stopCamera(); return; }
-    if (!HandTracker.supported()) { toast("Camera hand tracking needs a secure browser with camera support. Chrome or Edge works best.", "error"); return; }
+    if (!HandTracker.supported()) { if (!opts.silent) toast("Camera hand tracking needs a secure browser with camera support. Chrome or Edge works best.", "error"); else say("Camera unavailable — mouse, keyboard and voice still work"); return; }
     const t = new HandTracker(videoRef.current!, onFrame, (message) => {
       if (!mounted.current || tracker.current !== t) return;
       stopCamera();
@@ -536,34 +549,33 @@ export function Graph() {
   /* ───────────────────────── voice ───────────────────────── */
   const ask = useCallback(
     async (q: string) => {
-      if (!q.trim() || !capture) return;
+      if (!q.trim() || !capture || askBusy.current) return;
+      askBusy.current = true;
+      const epoch = ++requestEpoch.current;
+      voice.current?.thinking();
+      speaker.current?.stop();
       setAsking(true);
+      setAnswer(null);
       setSelected(null);
       selectedRef.current = null;
       try {
         const r = await api.ask(id, q, capture.successor?.name);
+        if (!mounted.current || epoch !== requestEpoch.current) return;
         setAnswer(r);
         const cited = r.citations.map((c) => c.atomId);
-        if (cited.length) {
-          setHighlight(cited);
-          flyTo(cited, 150, 1500);
-        } else setHighlight(null);
-        const plain = r.answer.replace(/\[\d+\]/g, "").replace(/[*#>_`]/g, "").replace(/\s+/g, " ").trim().slice(0, 600);
-        voice.current?.stopListening();
-        const resume = () => {
-          if (voiceOnRef.current) voice.current?.listen();
-        };
-        if (health?.higgs) {
-          api
-            .speak(plain, id)
-            .then((b) => player.current.play(b))
-            .catch(() => voice.current?.speak(plain))
-            .finally(resume);
-        } else void voice.current?.speak(plain).finally(resume);
+        if (cited.length) { setHighlight(cited); flyTo(cited, 150, 1500); }
+        else setHighlight(null);
+        const plain = r.answer.replace(/\[\d+\]/g, "").replace(/[*#>_`]/g, "").replace(/\s+/g, " ").trim();
+        speaker.current ??= new SpokenAudio(() => { if (mounted.current) say("Using the browser voice"); });
+        try { await speaker.current.speak(plain, health?.higgs ? () => api.speak(plain, id) : undefined); }
+        catch (error) { if (mounted.current) toast(`The answer is ready; audio could not play. ${(error as Error).message}`, "error"); }
       } catch (e) {
-        toast((e as Error).message, "error");
+        if (mounted.current && epoch === requestEpoch.current) toast((e as Error).message, "error");
       } finally {
-        setAsking(false);
+        if (epoch === requestEpoch.current) {
+          askBusy.current = false;
+          if (mounted.current) setAsking(false);
+        }
       }
     },
     [api, capture, flyTo, health?.higgs, id, setHighlight, toast],
@@ -600,7 +612,7 @@ export function Graph() {
 
   const TYPE_WORDS: Record<string, string> = { risk: "risk", risks: "risk", gotcha: "gotcha", gotchas: "gotcha", trap: "gotcha", traps: "gotcha", contact: "contact", contacts: "contact", people: "contact", person: "person", tool: "tool", tools: "tool", system: "tool", systems: "tool", procedure: "procedure", procedures: "procedure", step: "procedure", steps: "procedure", rule: "rule", rules: "rule", decision: "decision", decisions: "decision", story: "story", stories: "story", glossary: "glossary", term: "glossary", terms: "glossary", domain: "domain", domains: "domain", team: "team", teams: "team" };
 
-  const showTarget = (target: string) => {
+  const showTarget = async (target: string) => {
     const nodes = nodesRef.current;
     const key = target.toLowerCase();
     // 1. an atom type / node group
@@ -612,7 +624,7 @@ export function Graph() {
         selectedRef.current = null;
         setAnswer(null);
         setHighlight(ids);
-        flyTo(ids, 190, 1200);
+        flyTo(ids, 130, 1000, false);
         say(`Showing ${ids.length} ${group}${ids.length === 1 ? "" : group === "glossary" ? " terms" : "s"}`);
         return;
       }
@@ -634,7 +646,7 @@ export function Graph() {
       return;
     }
     say(`Nothing matched “${target}” — asking the twin`);
-    void ask(target);
+    await ask(target);
   };
 
   const runCommand = async (c: Command) => {
@@ -648,7 +660,8 @@ export function Graph() {
         say(c.factor < 1 ? "Zooming in" : "Zooming out");
         break;
       case "rotate":
-        for (let i = 0; i < 12; i++) {
+        if (reducedMotion.current) orbit(c.dAz, c.dPolar);
+        else for (let i = 0; i < 12 && mounted.current; i++) {
           orbit(c.dAz / 12, c.dPolar / 12);
           await new Promise((r) => setTimeout(r, 30));
         }
@@ -659,10 +672,10 @@ export function Graph() {
         say(c.on ? "Stepping inside" : "Corner view");
         break;
       case "camera":
-        if (camOn !== c.on) await toggleCamera();
+        if (Boolean(tracker.current) !== c.on) await toggleCamera();
         break;
       case "show":
-        showTarget(c.target);
+        await showTarget(c.target);
         break;
       case "question":
         say(`Asking: “${c.text}”`);
@@ -673,31 +686,47 @@ export function Graph() {
 
   const handleUtterance = async (text: string) => {
     const t = text.trim();
-    if (!t) return;
-    await runCommand(parseCommand(t));
+    if (!t || askBusy.current) return;
+    const epoch = voiceEpoch.current;
+    voice.current?.stopListening();
+    try { await runCommand(parseCommand(t)); }
+    catch (error) { if (mounted.current) toast((error as Error).message, "error"); }
+    finally {
+      if (mounted.current && voiceOnRef.current && epoch === voiceEpoch.current && !askBusy.current) { voice.current?.idle(); voice.current?.listen(); }
+    }
   };
 
+  utteranceHandler.current = handleUtterance;
+
   const toggleMic = async () => {
+    if (micStarting.current) return;
     if (!BrowserVoice.recognitionSupported()) {
       toast("Speech recognition isn't available in this browser. Chrome works best.", "error");
       return;
     }
+    micStarting.current = true;
+    const epoch = ++voiceEpoch.current;
     try {
       if (!voice.current) {
         const v = new BrowserVoice({
           onPartial: setHeard,
           onFinal: (t) => {
             setHeard("");
-            void handleUtterance(t).finally(() => {
-              if (voiceOnRef.current) voice.current?.listen();
-            });
+            void utteranceHandler.current(t);
           },
           onState: (s) => setListening(s === "listening"),
           onLevel: () => undefined,
-          onError: (m) => toast(m, "error"),
+          onError: (m) => {
+            if (!mounted.current) return;
+            voiceOnRef.current = false;
+            setVoiceOn(false);
+            setListening(false);
+            toast(m, "error");
+          },
         });
-        await v.init();
         voice.current = v;
+        await v.init();
+        if (!mounted.current || epoch !== voiceEpoch.current) { v.destroy(); return; }
       }
       const next = !voiceOnRef.current;
       voiceOnRef.current = next;
@@ -705,10 +734,12 @@ export function Graph() {
       if (next) {
         voice.current.listen();
         say("Listening — say “show me the risks”, “zoom in”, or ask a question");
-      } else voice.current.stopListening();
+      } else { voice.current.stopListening(); speaker.current?.stop(); }
     } catch (e) {
-      toast((e as Error).message, "error");
-    }
+      voice.current?.destroy();
+      voice.current = null;
+      if (mounted.current) toast((e as Error).message, "error");
+    } finally { micStarting.current = false; }
   };
 
   const toggleImmersive = async () => {
@@ -732,8 +763,15 @@ export function Graph() {
       release();
       exitImmersive();
       window.clearTimeout(hudTimer.current);
+      voiceEpoch.current++;
+      requestEpoch.current++;
+      voiceOnRef.current = false;
       voice.current?.destroy();
-      player.current.stop();
+      voice.current = null;
+      speaker.current?.destroy();
+      speaker.current = null;
+      if (recorder.current?.state === "recording") { recorder.current.onstop = null; recorder.current.stop(); }
+      recordingCleanup.current?.();
       };
     },
     [],
@@ -742,30 +780,64 @@ export function Graph() {
   const toggleRecording = () => {
     const g = graphRef.current;
     if (!g) return;
-    if (recording) {
-      recorder.current?.stop();
-      return;
-    }
-    const canvas: HTMLCanvasElement = g.renderer().domElement;
-    const stream = canvas.captureStream(30);
-    const mime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined);
-    recChunks.current = [];
-    rec.ondataavailable = (e) => e.data.size && recChunks.current.push(e.data);
-    rec.onstop = () => {
-      const blob = new Blob(recChunks.current, { type: mime || "video/webm" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `tacit-constellation-${Date.now()}.${mime.includes("mp4") ? "mp4" : "webm"}`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-      setRecording(false);
-      say("Clip saved to your downloads");
-    };
-    rec.start(500);
-    recorder.current = rec;
-    setRecording(true);
-    say("Recording the constellation");
+    if (recorder.current?.state === "recording") { recorder.current.stop(); return; }
+    if (typeof MediaRecorder === "undefined" || !HTMLCanvasElement.prototype.captureStream) { toast("Clip recording is unavailable in this browser. Try Chrome or Edge.", "error"); return; }
+    try {
+      const source: HTMLCanvasElement = g.renderer().domElement;
+      const composite = document.createElement("canvas");
+      composite.width = Math.min(source.width, 1920);
+      composite.height = 2 * Math.round(composite.width * source.height / source.width / 2);
+      const ctx = composite.getContext("2d")!;
+      let frame = 0;
+      const draw = () => {
+        const w = composite.width, h = composite.height;
+        ctx.fillStyle = "#0e1013";
+        ctx.fillRect(0, 0, w, h);
+        const video = videoRef.current;
+        if (immersiveOn.current && tracker.current?.running && video && video.readyState >= 2) {
+          const v = cameraViewport(w, h, video.videoWidth, video.videoHeight);
+          ctx.save();
+          ctx.globalAlpha = 0.5;
+          ctx.translate(w, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(video, v.x, v.y, v.width, v.height);
+          ctx.restore();
+        }
+        // Read the WebGL buffer in the same task as rendering; browsers clear it after presentation.
+        g.postProcessingComposer().render();
+        ctx.save();
+        if (immersiveOn.current && tracker.current?.running) ctx.globalCompositeOperation = "screen";
+        ctx.drawImage(source, 0, 0, w, h);
+        ctx.restore();
+        if (immersiveOn.current && fullOverlayRef.current) ctx.drawImage(fullOverlayRef.current, 0, 0, w, h);
+        frame = requestAnimationFrame(draw);
+      };
+      draw();
+      const stream = composite.captureStream(30);
+      recordingCleanup.current = () => { cancelAnimationFrame(frame); stream.getTracks().forEach((track) => track.stop()); recordingCleanup.current = null; };
+      const mime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined);
+      recChunks.current = [];
+      rec.ondataavailable = (e) => { if (e.data.size) recChunks.current.push(e.data); };
+      rec.onstop = () => {
+        recordingCleanup.current?.();
+        recorder.current = null;
+        if (!mounted.current) return;
+        const blob = new Blob(recChunks.current, { type: rec.mimeType || mime || "video/webm" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `tacit-constellation-${Date.now()}.${blob.type.includes("mp4") ? "mp4" : "webm"}`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        setRecording(false);
+        say("Visual clip saved to your downloads");
+      };
+      rec.onerror = () => { recordingCleanup.current?.(); recorder.current = null; setRecording(false); toast("Recording stopped. Please try again.", "error"); };
+      rec.start(500);
+      recorder.current = rec;
+      setRecording(true);
+      say("Recording a visual clip");
+    } catch (error) { recordingCleanup.current?.(); toast(`Could not record: ${(error as Error).message}`, "error"); }
   };
 
   const reset = () => {
@@ -773,7 +845,8 @@ export function Graph() {
     setAnswer(null);
     release();
     motion.current.reset();
-    graphRef.current?.zoomToFit(reducedMotion.current ? 0 : 900, 65);
+    initialFitPending.current = false;
+    frame(nodesRef.current, 90, 700);
   };
 
   const first = capture?.expert.name.split(" ")[0] ?? "";
@@ -806,7 +879,7 @@ export function Graph() {
           <Badge className="hidden xl:inline-flex" tone={camOn ? "accent" : "neutral"} icon={<Hand className="h-3 w-3" />}>
             {camOn ? (mode === "off" ? camStatus || "Starting camera… allow access" : `${MODE_TEXT[mode]}${fps ? ` · ${fps} fps` : ""}`) : "Camera off · click “Use my hands”"}
           </Badge>
-          <Button size="sm" variant={camOn ? "accent" : "secondary"} onClick={() => toggleCamera()} icon={camOn ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}>
+          <Button size="sm" variant={camOn ? "accent" : "secondary"} disabled={!ready} onClick={() => toggleCamera()} icon={camOn ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}>
             {camOn ? "Stop camera" : "Use my hands"}
           </Button>
           {camOn && (
@@ -829,13 +902,15 @@ export function Graph() {
               onChange={(e) => setTyped(e.target.value)}
               placeholder={`Ask ${first}…`}
               aria-label="Ask a question"
+              disabled={asking || !ready}
               className="h-8 w-44 rounded-full border border-line-2 bg-paper-2 px-3 text-[13px] text-ink placeholder:text-muted focus:outline-none focus:border-accent md:w-56"
             />
-            <Button type="button" size="sm" variant={voiceOn ? "accent" : "secondary"} onClick={toggleMic} loading={asking} icon={voiceOn ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />} title="Voice control: commands and questions">
+            <Button type="submit" size="sm" variant="secondary" disabled={asking || !typed.trim() || !ready}>Ask</Button>
+            <Button type="button" size="sm" variant={voiceOn ? "accent" : "secondary"} onClick={toggleMic} disabled={!ready || (asking && !voiceOn)} icon={voiceOn ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />} title="Voice control: commands and questions">
               {voiceOn ? (listening ? "Listening…" : "Voice on") : "Voice"}
             </Button>
           </form>
-          <Button type="button" size="sm" variant={recording ? "danger" : "ghost"} className={recording ? "" : "text-ink-2 hover:bg-paper-3 hover:text-ink"} onClick={toggleRecording} icon={recording ? <Square className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5 text-danger" />} title="Record a clip of the constellation (with your camera backdrop when inside)">
+          <Button type="button" size="sm" variant={recording ? "danger" : "ghost"} className={recording ? "" : "text-ink-2 hover:bg-paper-3 hover:text-ink"} onClick={toggleRecording} icon={recording ? <Square className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5 text-danger" />} title="Save a silent visual clip of the constellation and camera backdrop">
             {recording ? "Stop" : "Record"}
           </Button>
           <Button size="sm" variant="ghost" className="text-ink-2 hover:text-ink hover:bg-paper-3" onClick={reset} icon={<RotateCcw className="h-3.5 w-3.5" />}>
@@ -850,7 +925,7 @@ export function Graph() {
         <video
           ref={videoRef}
           className={cx("pointer-events-none absolute object-contain", camOn && immersive ? "inset-0 h-full w-full opacity-50" : camOn ? "bottom-4 left-4 h-[150px] w-[200px] rounded-xl opacity-100" : "bottom-0 left-0 h-px w-px opacity-0")}
-          style={{ transform: "scaleX(-1)" }}
+          style={{ transform: "scaleX(-1)", zIndex: camOn && !immersive ? 2 : 0 }}
           playsInline
           muted
         />
@@ -863,12 +938,13 @@ export function Graph() {
             </div>
           </div>
         )}
-        {graphError && <div role="alert" className="absolute inset-0 grid place-items-center p-8 text-white"><div className="max-w-md rounded-xl border border-white/15 bg-[#151b24] p-6"><h2 className="text-xl">The 3D view could not start</h2><p className="mt-2 text-sm text-white/70">Enable hardware acceleration in your browser, then reload. You can still explore all captured knowledge.</p><Link to={`/c/${id}/knowledge`} className="mt-4 inline-block text-accent-2 underline">Open knowledge base</Link></div></div>}
+        {graphError && <div role="alert" className="absolute inset-0 grid place-items-center p-8 text-white"><div className="max-w-md rounded-xl border border-white/15 bg-[#151b24] p-6"><h2 className="text-xl">Constellation unavailable</h2><p className="mt-2 text-sm text-white/70">{graphError}. Try reopening this capture. If the 3D view still fails, enable hardware acceleration in your browser.</p><Link to={`/c/${id}/knowledge`} className="mt-4 inline-block text-accent-2 underline">Open knowledge base</Link></div></div>}
         {/* gesture cursor */}
         <div ref={cursorRef} className="pointer-events-none absolute left-0 top-0 h-7 w-7 rounded-full border-2 opacity-0 transition-opacity" style={{ boxShadow: "0 0 18px 4px rgba(232,179,107,.45)", borderColor: "#f6e3c3" }} />
 
+        {asking && !heard && <div role="status" className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 rounded-full bg-[#151b24]/90 px-4 py-2 text-sm text-white">{answer ? "Speaking answer…" : "Finding the answer…"}</div>}
         {heard && <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-[14px] backdrop-blur">{heard}…</div>}
-        {hud && !heard && <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 rounded-full border border-accent/40 bg-paper-2/90 px-4 py-2 text-[13.5px] text-accent-2 shadow-lift backdrop-blur rise-in">{hud}</div>}
+        {hud && !heard && !asking && <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 rounded-full border border-accent/40 bg-paper-2/90 px-4 py-2 text-[13.5px] text-accent-2 shadow-lift backdrop-blur rise-in">{hud}</div>}
 
         {/* details / answer panel */}
         {(selected || answer) && (
@@ -933,9 +1009,9 @@ export function Graph() {
         )}
 
         {/* camera PiP */}
-        <div className={cx("absolute bottom-4 left-4 overflow-hidden rounded-lg border border-line-2 bg-black/60 shadow-lift", camOn && !immersive ? "block" : "hidden")} style={{ width: 200, height: 150 }}>
+        <div className={cx("absolute z-[3] bottom-4 left-4 overflow-hidden rounded-lg border border-line-2 shadow-lift", camOn && !immersive ? "block" : "hidden")} style={{ width: 200, height: 150 }}>
           <canvas ref={overlayRef} width={200} height={150} className="absolute inset-0 h-full w-full" />
-          <div className="absolute bottom-1 left-2 text-[10.5px] text-ink-2">{MODE_TEXT[mode]}</div>
+          <div className="absolute bottom-1 left-1 rounded bg-black/75 px-1.5 py-0.5 text-[10.5px] text-white">{MODE_TEXT[mode]}</div>
         </div>
 
         {/* legend + help */}

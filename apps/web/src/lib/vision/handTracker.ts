@@ -57,7 +57,8 @@ export function analyseHand(landmarks: NormalizedLandmark[], handedness: "Left" 
   const extended = TIPS.map((tip, i) => dist(landmarks[tip], wrist, aspect) > dist(landmarks[PIPS[i]], wrist, aspect) * 1.12);
   const count = extended.filter(Boolean).length;
   const pinchDistance = Math.min(1, dist(landmarks[4], landmarks[8], aspect) / (size * 1.6));
-  const pinch = pinchDistance < 0.28;
+  // A closed fist also puts thumb and index close together; keep it a safe hold gesture.
+  const pinch = count > 0 && pinchDistance < 0.28;
   const pointing = !pinch && extended[0] && !extended[1] && !extended[2] && !extended[3];
   const open = !pinch && count >= 4;
   const fist = !pinch && count === 0;
@@ -88,7 +89,7 @@ export class HandStabilizer {
   reset() { this.previous = []; this.lastT = 0; }
 
   update(hands: HandState[], t: number): HandState[] {
-    if (t - this.lastT > 220) this.previous = [];
+    if (t - this.lastT > 1500) this.previous = [];
     const gain = Math.max(0.22, Math.min(0.8, 1 - Math.exp(-(t - this.lastT || 33) / 45)));
     this.lastT = t;
     const remaining = [...this.previous];
@@ -98,7 +99,7 @@ export class HandStabilizer {
       const candidate = remaining[0];
       const prev = candidate && Math.hypot(candidate.palm.x - h.palm.x, candidate.palm.y - h.palm.y) < 0.3 ? remaining.shift() : undefined;
       // Separate engage/release thresholds prevent a held pinch chattering near its boundary.
-      const pinch = h.pinchDistance < (prev?.pinch ? 0.36 : 0.24);
+      const pinch = !h.fist && h.pinchDistance < (prev?.pinch ? 0.36 : 0.24);
       return {
         ...h,
         trackingId: prev?.trackingId ?? this.nextId++,
@@ -210,6 +211,11 @@ export class HandTracker {
             this.onError?.(`Hand tracking stopped. ${cameraError(error)}`);
             return;
           }
+        } else if (now - this.lastInference > 700 && this.lastInference !== -Infinity) {
+          // A frozen/paused camera must not leave a node grabbed indefinitely.
+          this.lastInference = now;
+          this.stabilizer.reset();
+          this.onFrame({ hands: [], t: now, fps: 0 });
         }
         this.raf = requestAnimationFrame(loop);
       };

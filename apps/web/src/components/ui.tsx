@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useApp } from "../lib/store.js";
@@ -137,12 +137,16 @@ export function EmptyState({ icon, title, body, action }: { icon?: ReactNode; ti
 /* ────────────────────────────── Form ────────────────────────────── */
 
 export function Field({ label, hint, children, className }: { label: string; hint?: ReactNode; children: ReactNode; className?: string }) {
+  const generatedId = useId();
+  const child = isValidElement<{ id?: string; "aria-describedby"?: string }>(children) ? children : null;
+  const id = child?.props.id ?? generatedId;
+  const hintId = `${id}-hint`;
   return (
-    <label className={cx("block", className)}>
-      <span className="block text-[13px] font-medium text-ink-2 mb-1.5">{label}</span>
-      {children}
-      {hint && <span className="block text-[12px] text-muted mt-1.5">{hint}</span>}
-    </label>
+    <div className={cx("block", className)}>
+      <label htmlFor={id} className="block text-[13px] font-medium text-ink-2 mb-1.5">{label}</label>
+      {child ? cloneElement(child, { id, "aria-describedby": [child.props["aria-describedby"], hint ? hintId : undefined].filter(Boolean).join(" ") || undefined }) : children}
+      {hint && <span id={hintId} className="block text-[12px] text-muted mt-1.5">{hint}</span>}
+    </div>
   );
 }
 
@@ -175,7 +179,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 
 /* ────────────────────────────── Modal ────────────────────────────── */
 
-export function Modal({ open, onClose, title, children, footer, wide, returnFocusId }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean; returnFocusId?: string }) {
+export function Modal({ open, onClose, title, children, footer, wide, returnFocusId, error }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean; returnFocusId?: string; error?: string | null }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -197,8 +201,18 @@ export function Modal({ open, onClose, title, children, footer, wide, returnFocu
   }, [open, returnFocusId]);
   if (!open) return null;
   return createPortal(
-    <dialog ref={dialog} aria-labelledby={titleId} aria-modal="true" className={cx("tacit-dialog m-auto w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-paper text-ink shadow-lift border border-line rise-in", wide ? "max-w-3xl" : "max-w-lg")}
+    <dialog ref={dialog} aria-labelledby={titleId} aria-modal="true" className={cx("tacit-dialog m-auto w-[calc(100%_-_2rem)] max-h-[calc(100dvh_-_2rem)] overflow-y-auto rounded-2xl bg-paper text-ink shadow-lift border border-line rise-in", wide ? "max-w-3xl" : "max-w-lg")}
       onCancel={(e) => { e.preventDefault(); onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key !== "Tab") return;
+        const focusable = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+          .filter((element) => element.getClientRects().length > 0);
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!first) { e.preventDefault(); return; }
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }}
       onClick={(e) => {
         if (e.target !== e.currentTarget) return;
         const rect = e.currentTarget.getBoundingClientRect();
@@ -210,7 +224,10 @@ export function Modal({ open, onClose, title, children, footer, wide, returnFocu
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="px-6 pb-5">{children}</div>
+        <div className="px-6 pb-5">
+          {error && <p role="alert" className="mb-4 rounded-lg border border-danger/30 bg-danger-2 px-3 py-2.5 text-sm text-danger">{error}</p>}
+          {children}
+        </div>
         {footer && <div className="flex justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>}
     </dialog>, document.body,
   );
