@@ -255,6 +255,10 @@ export function InterviewRoom() {
           onUserPartial: setPartial,
           onAssistantPartial: setAssistantPartial,
           onAssistantTranscript: (text) => {
+            {
+              const last = [...turnsRef.current].reverse().find((x) => x.role === "interviewer");
+              if (last && sameLine(last.text, text)) return; // Higgs re-spoke the planned line; don't log it twice
+            }
             if (room !== generation.current || endingRef.current) return;
             setAssistantPartial("");
             if (skipFirstAssistant.current) {
