@@ -11,11 +11,42 @@ Style:
 - Acknowledge briefly (a few words), then ask. Do not summarise back at length.
 - Keep each reply under 45 words. Speak naturally; this will be read aloud.`;
 
+export const LANGUAGES: { code: string; name: string }[] = [
+  { code: "en-US", name: "English" },
+  { code: "es-ES", name: "Spanish" },
+  { code: "es-MX", name: "Spanish (Mexico)" },
+  { code: "pt-BR", name: "Portuguese (Brazil)" },
+  { code: "fr-FR", name: "French" },
+  { code: "de-DE", name: "German" },
+  { code: "it-IT", name: "Italian" },
+  { code: "hi-IN", name: "Hindi" },
+  { code: "ta-IN", name: "Tamil" },
+  { code: "te-IN", name: "Telugu" },
+  { code: "zh-CN", name: "Mandarin Chinese" },
+  { code: "ja-JP", name: "Japanese" },
+  { code: "ko-KR", name: "Korean" },
+  { code: "ar-SA", name: "Arabic" },
+  { code: "vi-VN", name: "Vietnamese" },
+  { code: "tl-PH", name: "Filipino" },
+  { code: "pl-PL", name: "Polish" },
+  { code: "tr-TR", name: "Turkish" },
+];
+
+export function languageName(code?: string): string {
+  if (!code) return "English";
+  return LANGUAGES.find((l) => l.code === code)?.name ?? code;
+}
+
+export function isEnglish(code?: string): boolean {
+  return !code || code.toLowerCase().startsWith("en");
+}
+
 export function captureBrief(c: Capture): string {
   const e = c.expert;
   const lines = [
     `Expert: ${e.name}, ${e.role}${e.team ? ` (${e.team})` : ""}${e.tenureYears ? `, ${e.tenureYears} years in role` : ""}.`,
     e.departureDate ? `Leaves on ${e.departureDate}.` : "",
+    !isEnglish(e.language) ? `Interview language: ${languageName(e.language)}. Speak ${languageName(e.language)} to the expert; they may mix languages.` : "",
     c.successor ? `Successor: ${c.successor.name}${c.successor.role ? ` (${c.successor.role})` : ""}.` : "",
     `Context: ${c.context}`,
   ];
@@ -37,7 +68,7 @@ export function planPrompt(input: { expert: Capture["expert"]; context: string }
       role: "system" as const,
       content: `You design knowledge-capture interview plans. Given an expert's role and context, produce 6–8 knowledge domains that, if captured, would let a successor do the job. Favour the operational, the fragile, and the undocumented. Reply with JSON only:
 {"domains":[{"name":"...","description":"one sentence","priority":1|2|3,"questions":["open question 1","open question 2","open question 3"]}]}
-Priorities: 1 critical, 2 important, 3 nice-to-have. Questions must be open, concrete, and spoken-language friendly.`,
+Priorities: 1 critical, 2 important, 3 nice-to-have. Questions must be open, concrete, and spoken-language friendly, written in English.`,
     },
     {
       role: "user" as const,
@@ -73,7 +104,7 @@ ${transcript || "(session just started)"}
 
 ${suggestedDomain ? `The planner suggests domain [${suggestedDomain.id}] "${suggestedDomain.name}"${suggestedQuestion ? ` with the question: "${suggestedQuestion}"` : ""} if the current thread is exhausted.` : ""}
 ${isOpening ? `This is the very first turn of the session: greet ${capture.expert.name.split(" ")[0]} in one short sentence as Tacit (you are the AI interviewer, not ${capture.successor?.name ?? "the successor"}), say in one short sentence that you're capturing what they know${capture.successor ? ` for ${capture.successor.name}` : ""}, then ask the first question${suggestedQuestion ? ` — use the planner's suggested question` : ""}.` : ""}
-Decide the single best next thing to say. Reply with JSON only:
+Decide the single best next thing to say.${!isEnglish(capture.expert.language) ? ` Write "say" in ${languageName(capture.expert.language)}.` : ""} Reply with JSON only:
 {"say":"<what you say, under 45 words, one question>","kind":"followup"|"new"|"successor","domainId":"<domain id>","questionId":"<successor question id if kind=successor, else null>"}`,
     },
   ];
@@ -85,6 +116,7 @@ export function extractPrompt(args: { capture: Capture; question: string; answer
     {
       role: "system" as const,
       content: `You distil an expert's spoken answer into reusable knowledge atoms for their successor.
+OUTPUT LANGUAGE: always write "title", "content" and "tags" in ENGLISH, even when the answer is in another language (translate faithfully). Only "sourceQuote" stays verbatim in the original language.
 Atom types: ${ATOM_TYPES.join(", ")}.
 - procedure: ordered steps. Write content as a numbered markdown list.
 - rule: an always/never/if-then that governs decisions.
@@ -96,6 +128,7 @@ Atom types: ${ATOM_TYPES.join(", ")}.
 - risk: something that can go badly wrong, its trigger and impact.
 - story: an illustrative anecdote worth keeping.
 Rules: Only extract what the expert actually said. Be thorough: every distinct reusable fact — each person, threshold, number, tool, timing rule, workaround or warning — becomes its own atom (typically 2–6 per answer; never merge a contact into a procedure). Title under 10 words. Content is crisp markdown in the third person ("Run the X report…"). Include the expert's own words as sourceQuote (a short verbatim excerpt). Assign domainId from the coverage map, or null. confidence 0.3–0.95. If the answer contains nothing reusable, return {"atoms":[]}.
+The expert may answer in any language: write title, content and tags in English so the knowledge base is uniform, and keep sourceQuote verbatim in the original language.
 Reply with JSON only: {"atoms":[{"type":"...","title":"...","content":"...","tags":["..."],"confidence":0.8,"domainId":"...","sourceQuote":"..."}]}`,
     },
     {
@@ -106,7 +139,9 @@ Domains:
 ${capture.domains.map((d) => `- [${d.id}] ${d.name}: ${d.description}`).join("\n")}
 
 Interviewer asked: ${question}
-${capture.expert.name} answered: ${answer}`,
+${capture.expert.name} answered: ${answer}
+
+Remember: title/content/tags in English; sourceQuote verbatim.`,
     },
   ];
 }

@@ -2,7 +2,7 @@ import { AlertCircle, Clock, FileText, MessageSquareText, Mic, MoreHorizontal, O
 import { BlobPlayer } from "../lib/voice/player.js";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { Atom, Capture, Question, Session } from "@tacit/core";
+import { languageName, type Atom, type Capture, type Question, type Session } from "@tacit/core";
 import { AtomCard } from "../components/AtomCard.js";
 import { CoverageMap } from "../components/CoverageMap.js";
 import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Input, Modal, SectionTitle, Stat, cx } from "../components/ui.js";
@@ -103,70 +103,75 @@ export function CaptureOverview() {
 
   return (
     <div className="space-y-7">
-      <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-start gap-4">
-          <Avatar name={capture.expert.name} size={56} />
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-display text-[34px] leading-none">{capture.expert.name}</h1>
-              {capture.sample && <Badge tone="neutral">Sample</Badge>}
-              {capture.voiceId && (
-                <Badge tone="accent" icon={<Volume2 className="h-3 w-3" />}>
-                  Voice cloned
-                </Badge>
-              )}
-              <Badge tone={capture.status === "complete" ? "sage" : capture.status === "active" ? "accent" : "neutral"}>{capture.status}</Badge>
-            </div>
-            <p className="mt-1.5 text-ink-2">
-              {capture.expert.role}
-              {capture.expert.team ? ` · ${capture.expert.team}` : ""}
-              {capture.expert.tenureYears ? ` · ${capture.expert.tenureYears} years` : ""}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-muted">
-              {days !== null && (
-                <Badge tone={days <= 30 ? "danger" : days <= 90 ? "amber" : "neutral"} icon={<Clock className="h-3 w-3" />}>
-                  {days < 0 ? `Left ${fmtDate(capture.expert.departureDate)}` : `${days} days until ${fmtDate(capture.expert.departureDate)}`}
-                </Badge>
-              )}
-              {capture.successor && (
-                <span>
-                  Successor: <span className="text-ink">{capture.successor.name}</span>
-                  {capture.successor.role ? ` (${capture.successor.role})` : ""}
-                </span>
-              )}
+      <header className="rounded-[24px] border border-line bg-white/55 p-5 md:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-4">
+            <Avatar name={capture.expert.name} size={60} />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="font-display text-[32px] leading-none md:text-[36px]">{capture.expert.name}</h1>
+                {capture.sample && <Badge tone="neutral">Sample</Badge>}
+                {capture.voiceId && (
+                  <Badge tone="accent" icon={<Volume2 className="h-3 w-3" />}>
+                    Voice cloned
+                  </Badge>
+                )}
+                {capture.expert.language && !capture.expert.language.toLowerCase().startsWith("en") && <Badge tone="info">{languageName(capture.expert.language)} interview</Badge>}
+              </div>
+              <p className="mt-1.5 text-[15px] text-ink-2">
+                {capture.expert.role}
+                {capture.expert.team ? ` · ${capture.expert.team}` : ""}
+                {capture.expert.tenureYears ? ` · ${capture.expert.tenureYears} years` : ""}
+              </p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[13.5px] text-muted">
+                {days !== null && (
+                  <Badge tone={days <= 30 ? "danger" : days <= 90 ? "amber" : "neutral"} icon={<Clock className="h-3 w-3" />}>
+                    {days < 0 ? `Left ${fmtDate(capture.expert.departureDate)}` : `${days} days until ${fmtDate(capture.expert.departureDate)}`}
+                  </Badge>
+                )}
+                {capture.successor && (
+                  <span>
+                    Successor <span className="font-medium text-ink">{capture.successor.name}</span>
+                    {capture.successor.role ? ` · ${capture.successor.role}` : ""}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button variant="accent" size="lg" icon={<Mic className="h-4 w-4" />} onClick={() => nav(`/c/${id}/interview`)}>
+              {sessions.length ? "Continue interviewing" : "Start first interview"}
+            </Button>
+            <Button size="lg" icon={<MessageSquareText className="h-4 w-4" />} onClick={() => nav(`/c/${id}/ask`)}>
+              Ask the twin
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="accent" size="lg" icon={<Mic className="h-4 w-4" />} onClick={() => nav(`/c/${id}/interview`)}>
-            {sessions.length ? "Continue interviewing" : "Start first interview"}
-          </Button>
-          <Button size="lg" icon={<MessageSquareText className="h-4 w-4" />} onClick={() => nav(`/c/${id}/ask`)}>
-            Ask the twin
-          </Button>
-          <Button size="lg" icon={<FileText className="h-4 w-4" />} onClick={() => nav(`/c/${id}/handover`)}>
-            Handover doc
-          </Button>
-          <Button size="lg" icon={<Orbit className="h-4 w-4" />} onClick={() => nav(`/c/${id}/graph`)} title="3D knowledge graph you can steer with your hands">
+        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Explore</span>
+          <Button size="sm" variant="ghost" icon={<Orbit className="h-3.5 w-3.5" />} onClick={() => nav(`/c/${id}/graph`)} title="3D knowledge graph you can steer with your hands">
             Constellation
           </Button>
-          <Button
-            size="lg"
-            variant="ghost"
-            icon={<Phone className="h-4 w-4" />}
-            onClick={() => (health?.phone ? setCallOpen(true) : toast("Phone interviews need LiveKit + Twilio configured on the server (see docs/PHONE.md).", "info"))}
-            title={health?.phone ? "Tacit calls the expert's phone" : "Configure LiveKit + Twilio to enable phone interviews"}
-            className={health?.phone ? "" : "opacity-70"}
-          >
-            Call the expert
+          <Button size="sm" variant="ghost" icon={<FileText className="h-3.5 w-3.5" />} onClick={() => nav(`/c/${id}/handover`)}>
+            Handover doc
           </Button>
           {health?.higgs && (
-            <Button size="lg" variant="ghost" icon={<Volume2 className="h-4 w-4" />} onClick={previewVoice} loading={previewing} title={capture.voiceId ? "Hear the twin in the expert's cloned voice" : "Hear the twin (default Higgs voice)"}>
+            <Button size="sm" variant="ghost" icon={<Volume2 className="h-3.5 w-3.5" />} onClick={previewVoice} loading={previewing} title={capture.voiceId ? "Hear the twin in the expert's cloned voice" : "Hear the twin (default Higgs voice)"}>
               Hear the twin
             </Button>
           )}
-          <div className="relative">
-            <Button variant="ghost" size="lg" onClick={() => setMenu(!menu)} aria-label="More">
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<Phone className="h-3.5 w-3.5" />}
+            onClick={() => (health?.phone ? setCallOpen(true) : toast("Phone interviews need LiveKit + Twilio configured on the server (see docs/PHONE.md).", "info"))}
+            title={health?.phone ? "Tacit calls the expert's phone" : "Configure LiveKit + Twilio to enable phone interviews"}
+            className={health?.phone ? "" : "opacity-60"}
+          >
+            Call the expert
+          </Button>
+          <div className="relative ml-auto">
+            <Button variant="ghost" size="sm" onClick={() => setMenu(!menu)} aria-label="More">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
             {menu && (

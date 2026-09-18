@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom";
 import type { AskResult, Atom, Capture, Question } from "@tacit/core";
 import { AtomCard } from "../components/AtomCard.js";
 import { Markdown } from "../components/Markdown.js";
-import { Avatar, Badge, Button, Card, CardHeader, Input, cx } from "../components/ui.js";
+import { Avatar, Badge, Button, Card, CardHeader, Input, PageHeader, cx } from "../components/ui.js";
 import { fmtRelative } from "../lib/format.js";
 import { useApi, useApp } from "../lib/store.js";
 import { BrowserVoice } from "../lib/voice/browserVoice.js";
@@ -136,14 +136,17 @@ export function Ask() {
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
       <div className="flex min-h-[70vh] flex-col">
-        <header className="mb-4">
-          <p className="text-[12px] uppercase tracking-[0.16em] text-muted font-semibold">Ask the twin</p>
-          <h1 className="font-display text-[34px] leading-tight mt-1">Ask {first} anything</h1>
-          <p className="text-ink-2 mt-1 text-[14px]">
-            Answers come only from what {first} actually said, with citations. If the twin doesn't know, the question goes to {first}'s next interview.
-            {capture?.voiceId && health?.higgs && <span className="ml-1 text-accent">Spoken answers use {first}'s cloned voice.</span>}
-          </p>
-        </header>
+        <PageHeader
+          className="mb-4"
+          eyebrow="Ask the twin"
+          title={`Ask ${first} anything`}
+          lede={
+            <>
+              Answers come only from what {first} actually said, with citations. If the twin doesn't know, the question goes to {first}'s next interview.
+              {capture?.voiceId && health?.higgs && <span className="ml-1 text-accent">Spoken answers use {first}'s cloned voice.</span>}
+            </>
+          }
+        />
 
         <div className="flex-1 space-y-5 overflow-y-auto pr-1 scrollbar-thin">
           {exchanges.length === 0 && (
@@ -218,9 +221,10 @@ export function Ask() {
           }}
         >
           <Button type="button" variant={listening ? "accent" : "secondary"} onClick={toggleMic} icon={listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} aria-label="Ask by voice" />
-          <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening…" : `Ask ${first} a question…`} className={cx(listening && "border-accent")} />
+          <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening…" : `Ask ${first} a question…`} className={cx("h-11", listening && "border-accent")} />
           <Button
             type="button"
+            className="hidden sm:inline-flex"
             variant={speakAnswers ? "accent" : "ghost"}
             onClick={toggleSpeak}
             icon={speakAnswers ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}

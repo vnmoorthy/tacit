@@ -2,7 +2,9 @@ import { ArrowRight, Clock, Database, Mic, Plus, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Capture } from "@tacit/core";
-import { Avatar, Badge, Button, Card, EmptyState, ProgressBar, Stat, cx } from "../components/ui.js";
+import { OrbArt } from "../components/OrbArt.js";
+import { Ring } from "../components/Ring.js";
+import { Avatar, Badge, Button, Card, EmptyState, SectionTitle, Stat, cx } from "../components/ui.js";
 import { daysUntil, fmtRelative, pct, plural } from "../lib/format.js";
 import { useApi, useApp } from "../lib/store.js";
 
@@ -19,32 +21,39 @@ export function CaptureCard({ c }: { c: Capture }) {
   const risk = riskTone(days);
   return (
     <Link to={`/c/${c.id}`} className="group block">
-      <Card className="h-full p-5 transition hover:shadow-lift hover:border-line-2">
+      <Card className="h-full p-5 transition hover:-translate-y-0.5 hover:border-line-2 hover:shadow-lift">
         <div className="flex items-start gap-3">
           <Avatar name={c.expert.name} size={44} />
           <div className="min-w-0 flex-1">
-            <h3 className="font-display text-[19px] leading-tight truncate">{c.expert.name}</h3>
-            <p className="text-[13px] text-muted truncate">{c.expert.role}</p>
+            <h3 className="font-display truncate text-[20px] leading-tight">{c.expert.name}</h3>
+            <p className="truncate text-[13.5px] text-muted">{c.expert.role}</p>
+            <div className="mt-2">
+              <Badge tone={risk.tone} icon={<Clock className="h-3 w-3" />}>
+                {risk.label}
+              </Badge>
+            </div>
           </div>
-          <Badge tone={risk.tone} icon={<Clock className="h-3 w-3" />}>
-            {risk.label}
-          </Badge>
+          <Ring value={c.stats.coverage} tone={c.stats.coverage > 0.66 ? "sage" : "accent"} />
         </div>
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-[12px] text-muted mb-1.5">
-            <span>Coverage</span>
-            <span className="font-mono text-ink">{pct(c.stats.coverage)}</span>
+        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-3 text-center">
+          <div>
+            <div className="font-display text-[20px] leading-none">{c.stats.atoms}</div>
+            <div className="mt-1 text-[11px] uppercase tracking-wider text-muted">atoms</div>
           </div>
-          <ProgressBar value={c.stats.coverage} tone={c.stats.coverage > 0.66 ? "sage" : "accent"} />
+          <div>
+            <div className="font-display text-[20px] leading-none">{c.stats.sessions}</div>
+            <div className="mt-1 text-[11px] uppercase tracking-wider text-muted">sessions</div>
+          </div>
+          <div>
+            <div className={cx("font-display text-[20px] leading-none", c.stats.openQuestions ? "text-accent" : "")}>{c.stats.openQuestions}</div>
+            <div className="mt-1 text-[11px] uppercase tracking-wider text-muted">open</div>
+          </div>
         </div>
-        <div className="mt-4 flex items-center gap-4 text-[12.5px] text-muted">
-          <span>{plural(c.stats.atoms, "atom")}</span>
-          <span>{plural(c.stats.sessions, "session")}</span>
-          {c.stats.openQuestions > 0 && <span className="text-accent">{plural(c.stats.openQuestions, "open question")}</span>}
-          <span className="ml-auto">{fmtRelative(c.updatedAt)}</span>
-        </div>
-        <div className={cx("mt-4 flex items-center gap-1 text-[13px] font-medium text-ink-2 opacity-0 transition group-hover:opacity-100")}>
-          Open capture <ArrowRight className="h-3.5 w-3.5" />
+        <div className="mt-3 flex items-center justify-between text-[12.5px] text-muted">
+          <span>Updated {fmtRelative(c.updatedAt)}</span>
+          <span className="inline-flex items-center gap-1 font-medium text-ink opacity-0 transition group-hover:opacity-100">
+            Open <ArrowRight className="h-3.5 w-3.5" />
+          </span>
         </div>
       </Card>
     </Link>
@@ -84,27 +93,42 @@ export function Dashboard() {
   const atoms = list.reduce((a, c) => a + c.stats.atoms, 0);
   const openQ = list.reduce((a, c) => a + c.stats.openQuestions, 0);
   const avgCov = list.length ? list.reduce((a, c) => a + c.stats.coverage, 0) / list.length : 0;
+  const hasSamples = list.some((c) => c.sample);
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-[12px] uppercase tracking-[0.16em] text-muted font-semibold">Institutional memory</p>
-          <h1 className="font-display text-[40px] leading-[1.05] mt-2 max-w-xl">
-            Every expert who leaves takes a library with them. <span className="text-accent">Tacit interviews them first.</span>
-          </h1>
+      {/* hero */}
+      <section className="relative overflow-hidden rounded-[28px] border border-ink/10 bg-ink px-7 py-9 text-paper md:px-12 md:py-12">
+        <div className="pointer-events-none absolute -right-32 -top-32 h-[520px] w-[520px] rounded-full" style={{ background: "radial-gradient(circle, rgba(232,179,107,.28), transparent 62%)" }} />
+        <div className="pointer-events-none absolute -bottom-40 -left-24 h-[420px] w-[420px] rounded-full" style={{ background: "radial-gradient(circle, rgba(184,84,30,.22), transparent 62%)" }} />
+        <div className="relative grid items-center gap-8 md:grid-cols-[1.25fr_1fr]">
+          <div>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-accent-2">Institutional memory</p>
+            <h1 className="font-display mt-3 text-[38px] leading-[1.03] md:text-[52px]">
+              Every expert who leaves takes a library with them. <span className="italic text-accent-2">Tacit interviews them first.</span>
+            </h1>
+            <p className="mt-4 max-w-xl text-[16px] leading-relaxed text-paper/70">A voice AI that interviews departing experts and turns what's in their head into a living, cited knowledge base their successor can talk to.</p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Button variant="accent" size="lg" icon={<Plus className="h-4 w-4" />} onClick={() => nav("/new")}>
+                New capture
+              </Button>
+              {!hasSamples && (
+                <Button size="lg" className="border-white/40 bg-white/10 text-paper hover:bg-white/20 hover:border-white/70" onClick={loadSamples} loading={loadingSamples} icon={<Database className="h-4 w-4" />}>
+                  Load sample captures
+                </Button>
+              )}
+              {hasSamples && list[0] && (
+                <Button size="lg" className="border-white/40 bg-white/10 text-paper hover:bg-white/20 hover:border-white/70" onClick={() => nav(`/c/${list.find((c) => c.sample)!.id}/interview`)} icon={<Mic className="h-4 w-4" />}>
+                  Try a live interview
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="hidden md:block">
+            <OrbArt size={320} />
+          </div>
         </div>
-        <div className="flex gap-2 shrink-0">
-          {list.length > 0 && !list.some((c) => c.sample) && (
-            <Button onClick={loadSamples} loading={loadingSamples} icon={<Database className="h-4 w-4" />}>
-              Load samples
-            </Button>
-          )}
-          <Button variant="primary" size="lg" icon={<Plus className="h-4 w-4" />} onClick={() => nav("/new")}>
-            New capture
-          </Button>
-        </div>
-      </header>
+      </section>
 
       {list.length > 0 && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -115,48 +139,60 @@ export function Dashboard() {
         </div>
       )}
 
-      {captures === null ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-44 rounded-2xl bg-paper-2 animate-pulse" />
-          ))}
-        </div>
-      ) : list.length === 0 ? (
-        <EmptyState
-          icon={<Sparkles className="h-5 w-5" />}
-          title="No captures yet"
-          body="Create a capture for an expert who is leaving, or load two sample captures (a payroll lead and an SRE) to see Tacit with real knowledge already in it."
+      <section>
+        <SectionTitle
           action={
-            <>
-              <Button onClick={loadSamples} loading={loadingSamples} icon={<Database className="h-4 w-4" />}>
-                Load sample captures
-              </Button>
-              <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => nav("/new")}>
-                New capture
-              </Button>
-            </>
+            <Button size="sm" variant="ghost" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => nav("/new")}>
+              New capture
+            </Button>
           }
-        />
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {list.map((c) => (
-            <CaptureCard key={c.id} c={c} />
-          ))}
-        </div>
-      )}
+        >
+          Captures
+        </SectionTitle>
+        {captures === null ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-44 animate-pulse rounded-2xl bg-paper-2" />
+            ))}
+          </div>
+        ) : list.length === 0 ? (
+          <EmptyState
+            icon={<Sparkles className="h-5 w-5" />}
+            title="No captures yet"
+            body="Create a capture for an expert who is leaving, or load two sample captures (a payroll lead and an SRE) to see Tacit with real knowledge already in it."
+            action={
+              <>
+                <Button onClick={loadSamples} loading={loadingSamples} icon={<Database className="h-4 w-4" />}>
+                  Load sample captures
+                </Button>
+                <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => nav("/new")}>
+                  New capture
+                </Button>
+              </>
+            }
+          />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {list.map((c) => (
+              <CaptureCard key={c.id} c={c} />
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="grid gap-4 md:grid-cols-3">
         {[
-          { icon: <Mic className="h-4 w-4" />, t: "1 · Interview", b: "A voice agent interviews the expert one question at a time, following threads and probing for failure modes." },
-          { icon: <Sparkles className="h-4 w-4" />, t: "2 · Distil", b: "Answers become typed knowledge atoms with source quotes. The coverage map fills in live." },
-          { icon: <ArrowRight className="h-4 w-4" />, t: "3 · Hand over", b: "The successor asks the twin. Unanswered questions go straight back into the next interview." },
+          { n: "01", icon: <Mic className="h-4 w-4" />, t: "Interview", b: "A voice agent interviews the expert one question at a time, following threads and probing for failure modes." },
+          { n: "02", icon: <Sparkles className="h-4 w-4" />, t: "Distil", b: "Answers become typed knowledge atoms with source quotes. The coverage map fills in live." },
+          { n: "03", icon: <ArrowRight className="h-4 w-4" />, t: "Hand over", b: "The successor asks the twin. Unanswered questions go straight back into the next interview." },
         ].map((s) => (
           <Card key={s.t} className="p-5">
-            <div className="flex items-center gap-2 text-accent">
-              {s.icon}
-              <span className="text-[12px] uppercase tracking-[0.14em] font-semibold">{s.t}</span>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-[12px] text-muted">{s.n}</span>
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-accent-3 text-accent">{s.icon}</span>
+              <span className="font-display text-[19px]">{s.t}</span>
             </div>
-            <p className="mt-2 text-[13.5px] text-ink-2 leading-relaxed">{s.b}</p>
+            <p className="mt-3 text-[14px] leading-relaxed text-ink-2">{s.b}</p>
           </Card>
         ))}
       </section>

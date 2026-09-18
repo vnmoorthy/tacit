@@ -35,7 +35,11 @@ export class BrowserVoice {
   private voice: SpeechSynthesisVoice | null = null;
   private synthUnlocked = false;
 
-  constructor(private ev: BrowserVoiceEvents) {}
+  private lang = "en-US";
+
+  constructor(private ev: BrowserVoiceEvents, lang?: string) {
+    if (lang) this.lang = lang;
+  }
 
   private setState(s: VoiceState) {
     this.state = s;
@@ -57,6 +61,14 @@ export class BrowserVoice {
   private pickVoice() {
     const voices = window.speechSynthesis?.getVoices?.() ?? [];
     if (!voices.length) return;
+    const base = this.lang.split("-")[0].toLowerCase();
+    if (base !== "en") {
+      const exact = voices.filter((v) => v.lang.toLowerCase().replace("_", "-") === this.lang.toLowerCase());
+      const family = voices.filter((v) => v.lang.toLowerCase().startsWith(base));
+      const pool = exact.length ? exact : family;
+      this.voice = pool.find((v) => /Google|Natural|Premium|Enhanced/i.test(v.name)) ?? pool[0] ?? voices[0];
+      return;
+    }
     const prefs = [/Google US English/i, /Samantha/i, /Karen/i, /Daniel/i, /Moira/i, /Microsoft (Aria|Jenny|Guy)/i, /en-US/i, /en-GB/i, /en/i];
     for (const re of prefs) {
       const v = voices.find((v) => re.test(v.name) || re.test(v.lang));
@@ -87,7 +99,7 @@ export class BrowserVoice {
     }
     const rec = new Ctor();
     this.rec = rec;
-    rec.lang = "en-US";
+    rec.lang = this.lang;
     rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;

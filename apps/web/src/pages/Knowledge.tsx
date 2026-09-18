@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom";
 import type { Atom, AtomType, Capture } from "@tacit/core";
 import { ATOM_TYPES } from "@tacit/core";
 import { ATOM_META, AtomCard } from "../components/AtomCard.js";
-import { Button, EmptyState, Field, Input, Modal, Select, Textarea, Toggle, cx } from "../components/ui.js";
+import { Button, EmptyState, Field, Input, Modal, PageHeader, Select, Textarea, Toggle, cx } from "../components/ui.js";
 import { useApi, useApp } from "../lib/store.js";
 
 export function Knowledge() {
@@ -87,13 +87,16 @@ export function Knowledge() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-[12px] uppercase tracking-[0.16em] text-muted font-semibold">Knowledge base</p>
-        <h1 className="font-display text-[34px] leading-tight mt-1">
-          {capture ? `What ${capture.expert.name.split(" ")[0]} knows` : "Knowledge"}
-          <span className="ml-3 font-mono text-[15px] text-muted align-middle">{atoms.length} atoms</span>
-        </h1>
-      </header>
+      <PageHeader
+        eyebrow="Knowledge base"
+        title={
+          <>
+            {capture ? `What ${capture.expert.name.split(" ")[0]} knows` : "Knowledge"}
+            <span className="ml-3 align-middle font-mono text-[15px] text-muted">{atoms.length} atoms</span>
+          </>
+        }
+        lede="Every atom is cited to the expert's own words. Verify what's right, fix what isn't, delete what's noise."
+      />
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <div className="relative flex-1">

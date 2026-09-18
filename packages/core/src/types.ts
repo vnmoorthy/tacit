@@ -13,6 +13,8 @@ export interface Expert {
   tenureYears?: number;
   /** ISO date (YYYY-MM-DD) of the expert's last day, if known. */
   departureDate?: string;
+  /** BCP-47 code of the language the expert prefers to be interviewed in (default en-US). Atoms are always written in English. */
+  language?: string;
 }
 
 export interface Successor {

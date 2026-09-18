@@ -1,7 +1,7 @@
 import { Database, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { EngineBadge } from "../components/Layout.js";
-import { Button, Card, CardHeader, Field, Input, Select, Toggle } from "../components/ui.js";
+import { Button, Card, CardHeader, Field, Input, PageHeader, Select, Toggle } from "../components/ui.js";
 import { getPreferredMode, setPreferredMode } from "../lib/api.js";
 import { DEFAULT_SETTINGS, clearLocalData, loadSettings, saveSettings, type LocalSettings } from "../lib/local.js";
 import { useApp } from "../lib/store.js";
@@ -40,13 +40,10 @@ export function Settings() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <header>
-        <p className="text-[12px] uppercase tracking-[0.16em] text-muted font-semibold">Settings</p>
-        <h1 className="font-display text-[34px] leading-tight mt-1">Engine & voice</h1>
-      </header>
+      <PageHeader eyebrow="Settings" title="Engine & voice" lede="Tacit picks the best available brain and voice automatically. Everything here is optional." />
 
       <Card>
-        <CardHeader title="Current engine" subtitle="What Tacit is thinking and speaking with right now." action={<EngineBadge />} />
+        <CardHeader title="Current engine" subtitle="What Tacit is thinking and speaking with right now." />
         <div className="px-5 pb-5 text-[13.5px] text-ink-2 space-y-1.5">
           <p>
             <span className="text-muted">Brain:</span> {health?.engine.brain}

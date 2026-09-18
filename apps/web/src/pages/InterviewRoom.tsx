@@ -115,7 +115,7 @@ export function InterviewRoom() {
           if (!muted) bv.current.listen();
           else setVoiceState("idle");
         } else {
-          setVoiceState(engine === "text" ? "off" : "idle");
+          setVoiceState("idle");
         }
       } catch (e) {
         toast((e as Error).message, "error");
@@ -140,13 +140,16 @@ export function InterviewRoom() {
       setTurns([r.interviewerTurn]);
 
       if (engine === "browser") {
-        const v = new BrowserVoice({
-          onPartial: setPartial,
-          onFinal: (t) => void submitExpert(t),
-          onState: setVoiceState,
-          onLevel: setLevel,
-          onError: (m) => toast(m, "error"),
-        });
+        const v = new BrowserVoice(
+          {
+            onPartial: setPartial,
+            onFinal: (t) => void submitExpert(t),
+            onState: setVoiceState,
+            onLevel: setLevel,
+            onError: (m) => toast(m, "error"),
+          },
+          capture.expert.language,
+        );
         bv.current = v;
         await v.init();
         if (health?.higgs && v.stream && ReferenceRecorder.supported()) {
@@ -181,7 +184,7 @@ export function InterviewRoom() {
         hv.current = v;
         await v.connect({ ...info, instructions: `${info.instructions}\n\nBegin the session by saying exactly this, then wait for the answer: "${r.interviewerTurn.text}"` });
       } else {
-        setVoiceState("off");
+        setVoiceState("idle");
       }
     } catch (e) {
       toast((e as Error).message, "error");
@@ -257,7 +260,7 @@ export function InterviewRoom() {
   const domainName = (did?: string) => capture?.domains.find((d) => d.id === did)?.name;
   const first = capture?.expert.name.split(" ")[0] ?? "";
   const statusLine =
-    voiceState === "listening" ? `Listening to ${first}…` : voiceState === "thinking" ? "Tacit is thinking…" : voiceState === "speaking" ? "Tacit is speaking" : session ? "Ready" : "";
+    voiceState === "listening" ? `Listening to ${first}…` : voiceState === "thinking" ? "Tacit is thinking…" : voiceState === "speaking" ? "Tacit is speaking" : session ? (engine === "text" ? "Your turn — type below" : "Ready") : "";
 
   if (!capture) return <div className="h-screen grid place-items-center text-muted">Loading…</div>;
 

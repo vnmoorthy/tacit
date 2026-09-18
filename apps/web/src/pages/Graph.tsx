@@ -3,7 +3,7 @@
  * Point to explore, pinch to grab and drag, open palm to orbit, two hands to zoom. Ask by voice
  * and the cited atoms light up while the camera flies to them.
  */
-import { ArrowLeft, Camera, CameraOff, Hand, Mic, MicOff, RotateCcw, Sparkles, Volume2 } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Hand, Mic, MicOff, PictureInPicture2, RotateCcw, ScanFace, Sparkles, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { AskResult, Capture, GraphData, GraphLink, GraphNode } from "@tacit/core";
@@ -39,7 +39,7 @@ const MODE_TEXT: Record<Mode, string> = {
   off: "Camera off",
   none: "Show me a hand",
   point: "Pointing · hover to reveal",
-  pinch: "Pinch near a node to grab it",
+  pinch: "Pinch · dragging the view (pinch on a node to grab it)",
   grab: "Dragging node",
   orbit: "Open palm · orbiting",
   zoom: "Two hands · zooming",
@@ -72,6 +72,10 @@ export function Graph() {
   const selectedRef = useRef<string | null>(null);
   const gesture = useRef<{ prevPalm: { x: number; y: number } | null; prevPair: number | null; grabbing: FGNode | null; depth: number }>({ prevPalm: null, prevPair: null, grabbing: null, depth: 100 });
   const tracker = useRef<HandTracker | null>(null);
+  const fullOverlayRef = useRef<HTMLCanvasElement>(null);
+  const immersiveRef = useRef<{ tex: any; plane: any; three: any } | null>(null);
+  const smooth = useRef<{ x: number; y: number } | null>(null);
+  const [immersive, setImmersive] = useState(true);
   const voice = useRef<BrowserVoice | null>(null);
   const player = useRef(new BlobPlayer());
 
@@ -324,6 +328,50 @@ export function Graph() {
     }
   };
 
+  /** Put the live camera behind the constellation (mirrored, dimmed) so the presenter stands inside the graph. */
+  const enterImmersive = async () => {
+    const g = graphRef.current;
+    const video = videoRef.current;
+    if (!g || !video || immersiveRef.current) return;
+    const THREE = await import("three");
+    const tex = new THREE.VideoTexture(video);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.repeat.x = -1; // mirror, like a mirror
+    const scene = g.scene();
+    const cam = g.camera();
+    scene.background = tex;
+    // A dark, camera-locked veil far behind the nodes keeps the graph legible over the video.
+    const D = 4000;
+    cam.far = Math.max(cam.far, D + 1000);
+    cam.updateProjectionMatrix();
+    const h = 2 * D * Math.tan((cam.fov * Math.PI) / 360) * 1.15;
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(h * cam.aspect, h), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.58, depthWrite: false }));
+    plane.position.set(0, 0, -D);
+    plane.renderOrder = -1;
+    if (!cam.parent) scene.add(cam);
+    cam.add(plane);
+    immersiveRef.current = { tex, plane, three: THREE };
+  };
+
+  const exitImmersive = () => {
+    const g = graphRef.current;
+    const im = immersiveRef.current;
+    if (!im) return;
+    immersiveRef.current = null;
+    try {
+      im.plane.parent?.remove(im.plane);
+      im.plane.geometry.dispose();
+      im.plane.material.dispose();
+      im.tex.dispose();
+      g?.backgroundColor("#0e0d0b");
+    } catch {
+      /* ignore */
+    }
+    const cv = fullOverlayRef.current;
+    if (cv) cv.getContext("2d")?.clearRect(0, 0, cv.width, cv.height);
+  };
+
   const showCursor = (x: number | null, y = 0, kind: "point" | "pinch" = "point") => {
     const c = cursorRef.current;
     if (!c) return;
@@ -339,14 +387,31 @@ export function Graph() {
   const onFrame = (f: HandFrame) => {
     const cv = overlayRef.current;
     if (cv) drawHands(cv.getContext("2d")!, f.hands, cv.width, cv.height);
-    if (f.fps !== fps) setFps(f.fps);
+    const full = fullOverlayRef.current;
     const el = containerRef.current;
+    if (full && el) {
+      if (full.width !== el.clientWidth || full.height !== el.clientHeight) {
+        full.width = el.clientWidth;
+        full.height = el.clientHeight;
+      }
+      if (immersiveRef.current) drawHands(full.getContext("2d")!, f.hands, full.width, full.height);
+    }
+    if (f.fps !== fps) setFps(f.fps);
     const g = graphRef.current;
     if (!el || !g) return;
     const W = el.clientWidth;
     const H = el.clientHeight;
     const gs = gesture.current;
-    const hands = f.hands;
+    // Light exponential smoothing on the primary hand's key points to tame landmark jitter.
+    const hands = f.hands.map((h, i) => {
+      if (i !== 0) return h;
+      const k = 0.55;
+      const prev = smooth.current;
+      const pointer = prev ? { x: prev.x + (h.pointer.x - prev.x) * k, y: prev.y + (h.pointer.y - prev.y) * k } : h.pointer;
+      smooth.current = pointer;
+      return { ...h, pointer };
+    });
+    if (!hands.length) smooth.current = null;
 
     if (hands.length === 2 && hands.every((h) => h.open || h.pointing)) {
       release();
@@ -393,8 +458,13 @@ export function Graph() {
         gs.grabbing.fz = q.z;
         g.d3ReheatSimulation();
         setModeSafe("grab");
-      } else setModeSafe("pinch");
-      gs.prevPalm = null;
+        gs.prevPalm = null;
+      } else {
+        // Pinching empty space drags the view, like a mouse drag.
+        if (gs.prevPalm) orbit(-(h.pinchPoint.x - gs.prevPalm.x) * 3.4, (h.pinchPoint.y - gs.prevPalm.y) * 2.6);
+        gs.prevPalm = h.pinchPoint;
+        setModeSafe("pinch");
+      }
       return;
     }
     if (gs.grabbing) {
@@ -433,6 +503,7 @@ export function Graph() {
 
   const toggleCamera = async () => {
     if (camOn) {
+      exitImmersive();
       tracker.current?.stop();
       tracker.current = null;
       setCamOn(false);
@@ -450,6 +521,7 @@ export function Graph() {
       setCamOn(true);
       await t.start(setCamStatus);
       setModeSafe("none");
+      if (immersive) await enterImmersive();
     } catch (e) {
       toast(`Camera: ${(e as Error).message}`, "error");
       tracker.current = null;
@@ -517,8 +589,17 @@ export function Graph() {
     }
   };
 
+  const toggleImmersive = async () => {
+    const next = !immersive;
+    setImmersive(next);
+    if (!camOn) return;
+    if (next) await enterImmersive();
+    else exitImmersive();
+  };
+
   useEffect(
     () => () => {
+      exitImmersive();
       tracker.current?.stop();
       voice.current?.destroy();
       player.current.stop();
@@ -565,6 +646,11 @@ export function Graph() {
           <Button size="sm" variant={camOn ? "accent" : "secondary"} onClick={toggleCamera} icon={camOn ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}>
             {camOn ? "Stop camera" : "Use my hands"}
           </Button>
+          {camOn && (
+            <Button size="sm" variant="ghost" className="text-paper/80 hover:bg-white/10 hover:text-paper" onClick={toggleImmersive} icon={immersive ? <PictureInPicture2 className="h-3.5 w-3.5" /> : <ScanFace className="h-3.5 w-3.5" />} title={immersive ? "Shrink the camera to a corner tile" : "Put yourself inside the constellation"}>
+              {immersive ? "Corner view" : "Step inside"}
+            </Button>
+          )}
           <form
             className="flex items-center gap-1"
             onSubmit={(e) => {
@@ -594,6 +680,7 @@ export function Graph() {
 
       <div className="relative min-h-0 flex-1">
         <div ref={containerRef} className="absolute inset-0" />
+        <canvas ref={fullOverlayRef} className={cx("pointer-events-none absolute inset-0 h-full w-full", camOn && immersive ? "opacity-90" : "opacity-0")} />
         {!ready && (
           <div className="absolute inset-0 grid place-items-center text-paper/60">
             <div className="flex items-center gap-3">
@@ -668,9 +755,10 @@ export function Graph() {
           </aside>
         )}
 
+        {/* camera feed: drives hand tracking and (in immersive mode) the scene background */}
+        <video ref={videoRef} className={cx("absolute bottom-4 left-4 h-[150px] w-[200px] rounded-xl object-cover", camOn && !immersive ? "block" : "hidden")} style={{ transform: "scaleX(-1)" }} />
         {/* camera PiP */}
-        <div className={cx("absolute bottom-4 left-4 overflow-hidden rounded-xl border border-white/15 bg-black/60 shadow-lift", camOn ? "block" : "hidden")} style={{ width: 200, height: 150 }}>
-          <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" style={{ transform: "scaleX(-1)" }} />
+        <div className={cx("absolute bottom-4 left-4 overflow-hidden rounded-xl border border-white/15 bg-black/60 shadow-lift", camOn && !immersive ? "block" : "hidden")} style={{ width: 200, height: 150 }}>
           <canvas ref={overlayRef} width={200} height={150} className="absolute inset-0 h-full w-full" />
           <div className="absolute bottom-1 left-2 text-[10.5px] text-paper/80">{MODE_TEXT[mode]}</div>
         </div>
@@ -686,7 +774,7 @@ export function Graph() {
             ))}
           </div>
           <div className="rounded-xl bg-black/40 px-3 py-2 text-[11px] text-paper/60 backdrop-blur">
-            {camOn ? "☝️ point to reveal · 🤏 pinch to grab · ✋ open palm to orbit · 🙌 two hands to zoom" : "Drag to orbit · scroll to zoom · click a node · or turn on your camera and use your hands"}
+            {camOn ? "☝️ point to reveal · 🤏 pinch a node to grab it, pinch space to turn · ✋ open palm to orbit · 🙌 two hands to zoom" : "Drag to orbit · scroll to zoom · click a node · or turn on your camera and use your hands"}
           </div>
         </div>
       </div>

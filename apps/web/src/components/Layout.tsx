@@ -1,9 +1,9 @@
-import { Bot, Brain, FileText, LayoutGrid, MessageSquareText, Mic, Orbit, Plus, Settings as SettingsIcon, Sparkles } from "lucide-react";
+import { Brain, FileText, LayoutGrid, MessageSquareText, Mic, Orbit, Plus, Settings as SettingsIcon, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useMatch } from "react-router-dom";
 import type { Capture } from "@tacit/core";
 import { useApi, useApp } from "../lib/store.js";
-import { Badge, cx } from "./ui.js";
+import { Avatar, cx } from "./ui.js";
 
 function NavItem({ to, icon, label, end }: { to: string; icon: React.ReactNode; label: string; end?: boolean }) {
   return (
@@ -12,7 +12,7 @@ function NavItem({ to, icon, label, end }: { to: string; icon: React.ReactNode; 
       end={end}
       className={({ isActive }) =>
         cx(
-          "flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium transition",
+          "flex items-center gap-2.5 rounded-xl px-3 py-2 text-[14px] font-medium transition",
           isActive ? "bg-ink text-paper shadow-soft" : "text-ink-2 hover:bg-paper-2 hover:text-ink",
         )
       }
@@ -23,22 +23,37 @@ function NavItem({ to, icon, label, end }: { to: string; icon: React.ReactNode; 
   );
 }
 
-export function EngineBadge() {
+/** Compact engine status: what Tacit is thinking and speaking with. */
+export function EngineBadge({ compact = false }: { compact?: boolean }) {
   const health = useApp((s) => s.health);
   if (!health) return null;
-  const brain = health.engine.brain === "demo-brain" ? "Demo brain" : `${health.engine.brain}${health.engine.model ? ` · ${health.engine.model.split("/").pop()}` : ""}`;
+  const demo = health.engine.brain === "demo-brain";
+  const brain = demo ? "Demo brain" : `${health.engine.brain === "nebius" ? "Nebius" : health.engine.brain} · ${health.engine.model?.split("/").pop()?.replace(/-Instruct.*$/, "") ?? ""}`;
+  const voice = health.higgs ? "Higgs Realtime" : "Browser voice";
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <Badge tone={health.engine.brain === "demo-brain" ? "neutral" : "sage"} icon={<Brain className="h-3 w-3" />}>
-        {brain}
-      </Badge>
-      <Badge tone={health.higgs ? "accent" : "neutral"} icon={<Mic className="h-3 w-3" />}>
-        {health.higgs ? "Higgs Realtime" : "Browser voice"}
-      </Badge>
-      <Badge tone="neutral">{health.mode === "server" ? "Server" : "Standalone"}</Badge>
+    <div className={cx("rounded-xl border border-line bg-white/50 text-[12px] leading-5", compact ? "px-2.5 py-1.5" : "px-3 py-2.5")}>
+      <div className="flex items-center gap-2">
+        <span className={cx("h-2 w-2 rounded-full", demo ? "bg-muted" : "bg-sage")} style={{ boxShadow: demo ? "none" : "0 0 0 3px rgba(79,125,92,.18)" }} />
+        <span className="truncate font-medium text-ink">{brain}</span>
+      </div>
+      {!compact && (
+        <div className="mt-0.5 flex items-center gap-2 text-muted">
+          <Mic className="h-3 w-3" /> {voice}
+          <span className="ml-auto rounded-md bg-paper-2 px-1.5 text-[10.5px] uppercase tracking-wider">{health.mode === "server" ? "server" : "standalone"}</span>
+        </div>
+      )}
     </div>
   );
 }
+
+const CAPTURE_TABS = (id: string) => [
+  { to: `/c/${id}`, icon: <Sparkles className="h-4 w-4" />, label: "Overview", end: true },
+  { to: `/c/${id}/interview`, icon: <Mic className="h-4 w-4" />, label: "Interview" },
+  { to: `/c/${id}/knowledge`, icon: <Brain className="h-4 w-4" />, label: "Knowledge" },
+  { to: `/c/${id}/ask`, icon: <MessageSquareText className="h-4 w-4" />, label: "Ask" },
+  { to: `/c/${id}/graph`, icon: <Orbit className="h-4 w-4" />, label: "Constellation" },
+  { to: `/c/${id}/handover`, icon: <FileText className="h-4 w-4" />, label: "Handover" },
+];
 
 export function Layout() {
   const match = useMatch("/c/:id/*");
@@ -58,9 +73,12 @@ export function Layout() {
     };
   }, [api, captureId]);
 
+  const tabs = captureId ? CAPTURE_TABS(captureId) : [];
+
   return (
-    <div className="flex h-full min-h-screen">
-      <aside className="hidden w-[248px] shrink-0 flex-col border-r border-line bg-paper-2/60 px-4 py-5 md:flex">
+    <div className="flex min-h-screen">
+      {/* ── desktop sidebar ── */}
+      <aside className="sticky top-0 hidden h-screen w-[256px] shrink-0 flex-col border-r border-line bg-paper-2/60 px-4 py-5 md:flex">
         <Link to="/" className="flex items-center gap-2.5 px-2">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink">
             <svg viewBox="0 0 64 64" className="h-5 w-5">
@@ -78,43 +96,74 @@ export function Layout() {
         </nav>
 
         {captureId && (
-          <div className="mt-6">
-            <div className="px-3 text-[11px] uppercase tracking-[0.14em] text-muted font-semibold truncate">{capture?.expert.name ?? "Capture"}</div>
-            <nav className="mt-2 space-y-1">
-              <NavItem to={`/c/${captureId}`} icon={<Sparkles className="h-4 w-4" />} label="Overview" end />
-              <NavItem to={`/c/${captureId}/interview`} icon={<Mic className="h-4 w-4" />} label="Interview" />
-              <NavItem to={`/c/${captureId}/knowledge`} icon={<Brain className="h-4 w-4" />} label="Knowledge" />
-              <NavItem to={`/c/${captureId}/ask`} icon={<MessageSquareText className="h-4 w-4" />} label="Ask the twin" />
-              <NavItem to={`/c/${captureId}/graph`} icon={<Orbit className="h-4 w-4" />} label="Constellation" />
-              <NavItem to={`/c/${captureId}/handover`} icon={<FileText className="h-4 w-4" />} label="Handover doc" />
+          <div className="mt-7">
+            <div className="flex items-center gap-2.5 px-2">
+              {capture && <Avatar name={capture.expert.name} size={28} />}
+              <div className="min-w-0">
+                <div className="truncate text-[13.5px] font-semibold text-ink">{capture?.expert.name ?? "Capture"}</div>
+                <div className="truncate text-[11.5px] text-muted">{capture?.expert.role ?? ""}</div>
+              </div>
+            </div>
+            <nav className="mt-3 space-y-1">
+              {tabs.map((t) => (
+                <NavItem key={t.to} {...t} />
+              ))}
             </nav>
           </div>
         )}
 
-        <div className="mt-auto space-y-3">
+        <div className="mt-auto space-y-2">
           <EngineBadge />
           <NavItem to="/settings" icon={<SettingsIcon className="h-4 w-4" />} label="Settings" />
-          <p className="px-3 text-[11px] text-muted leading-relaxed">
-            <Bot className="inline h-3 w-3 mr-1 -mt-0.5" />
-            Open source · MIT
-          </p>
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1">
-        <div className="md:hidden flex items-center justify-between border-b border-line px-4 py-3">
-          <Link to="/" className="font-display text-xl">
+      {/* ── main ── */}
+      <main className="min-w-0 flex-1 pb-20 md:pb-0">
+        {/* mobile top bar */}
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-paper/90 px-4 py-3 backdrop-blur md:hidden">
+          <Link to="/" className="flex items-center gap-2 font-display text-[20px]">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-ink">
+              <svg viewBox="0 0 64 64" className="h-4 w-4">
+                <circle cx="32" cy="32" r="17" fill="none" stroke="#E8B36B" strokeWidth="4" />
+                <circle cx="32" cy="32" r="3" fill="#E8B36B" />
+              </svg>
+            </span>
             Tacit
           </Link>
-          <div className="flex gap-2 text-[13px]">
-            {captureId && <Link to={`/c/${captureId}`}>Overview</Link>}
-            <Link to="/settings">Settings</Link>
+          <div className="flex items-center gap-1">
+            <EngineBadge compact />
+            <Link to="/settings" className="rounded-full p-2 text-ink-2 hover:bg-paper-2" aria-label="Settings">
+              <SettingsIcon className="h-4 w-4" />
+            </Link>
           </div>
         </div>
         <div className="mx-auto max-w-[1180px] px-5 py-7 md:px-8 md:py-9">
           <Outlet />
         </div>
       </main>
+
+      {/* ── mobile bottom tabs ── */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-paper/95 backdrop-blur md:hidden">
+        {(captureId
+          ? tabs.filter((t) => t.label !== "Handover")
+          : [
+              { to: "/", icon: <LayoutGrid className="h-4 w-4" />, label: "Captures", end: true },
+              { to: "/new", icon: <Plus className="h-4 w-4" />, label: "New" },
+              { to: "/settings", icon: <SettingsIcon className="h-4 w-4" />, label: "Settings" },
+            ]
+        ).map((t) => (
+          <NavLink
+            key={t.to}
+            to={t.to}
+            end={t.end}
+            className={({ isActive }) => cx("flex flex-1 flex-col items-center gap-1 py-2.5 text-[10.5px] font-medium", isActive ? "text-accent" : "text-muted")}
+          >
+            {t.icon}
+            {t.label}
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

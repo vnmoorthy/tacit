@@ -26,7 +26,7 @@ export function Button({
     primary: "bg-ink text-paper hover:bg-ink-2 shadow-soft",
     accent: "bg-accent text-white hover:brightness-110 shadow-soft",
     secondary: "bg-white/70 border border-line-2 text-ink hover:bg-white hover:border-ink/30",
-    ghost: "text-ink-2 hover:bg-paper-2 hover:text-ink",
+    ghost: "text-ink-2 border border-transparent hover:border-line-2 hover:bg-white/70 hover:text-ink",
     danger: "bg-danger-2 text-danger border border-danger/20 hover:bg-danger hover:text-white",
   };
   return (
@@ -79,13 +79,27 @@ export function Card({ className, children, ...props }: React.HTMLAttributes<HTM
 
 export function CardHeader({ title, subtitle, action }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 px-5 pt-5 pb-3">
-      <div>
-        <h3 className="font-display text-[19px] leading-tight">{title}</h3>
-        {subtitle && <p className="text-[13px] text-muted mt-0.5">{subtitle}</p>}
+    <div className="flex flex-col gap-3 px-5 pt-5 pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="min-w-0">
+        <h3 className="font-display text-[20px] leading-tight">{title}</h3>
+        {subtitle && <p className="mt-1 text-[13.5px] leading-snug text-muted">{subtitle}</p>}
       </div>
-      {action}
+      {action && <div className="shrink-0">{action}</div>}
     </div>
+  );
+}
+
+/** Consistent page header: eyebrow, display title, optional lede and actions. */
+export function PageHeader({ eyebrow, title, lede, actions, className }: { eyebrow?: ReactNode; title: ReactNode; lede?: ReactNode; actions?: ReactNode; className?: string }) {
+  return (
+    <header className={cx("flex flex-col gap-4 md:flex-row md:items-end md:justify-between", className)}>
+      <div className="min-w-0">
+        {eyebrow && <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">{eyebrow}</p>}
+        <h1 className="font-display mt-1.5 text-[32px] leading-[1.08] md:text-[38px]">{title}</h1>
+        {lede && <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-ink-2">{lede}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap gap-2 md:justify-end">{actions}</div>}
+    </header>
   );
 }
 
@@ -96,8 +110,8 @@ export function Stat({ label, value, hint, tone = "neutral" }: { label: string; 
   return (
     <Card className="px-5 py-4">
       <div className="text-[12px] uppercase tracking-wider text-muted font-medium">{label}</div>
-      <div className={cx("font-display text-[34px] leading-none mt-2", color)}>{value}</div>
-      {hint && <div className="text-[12.5px] text-muted mt-2">{hint}</div>}
+      <div className={cx("font-display mt-2 text-[30px] leading-none md:text-[34px]", color)}>{value}</div>
+      {hint && <div className="mt-2 text-[12.5px] leading-snug text-muted">{hint}</div>}
     </Card>
   );
 }

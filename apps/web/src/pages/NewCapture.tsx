@@ -1,7 +1,8 @@
 import { ArrowRight, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Field, Input, Textarea } from "../components/ui.js";
+import { LANGUAGES } from "@tacit/core";
+import { Button, Card, Field, Input, PageHeader, Select, Textarea } from "../components/ui.js";
 import { useApi, useApp } from "../lib/store.js";
 
 const EXAMPLES = [
@@ -50,9 +51,9 @@ export function NewCapture() {
   const api = useApi();
   const toast = useApp((s) => s.toast);
   const nav = useNavigate();
-  const [f, setF] = useState({ name: "", role: "", team: "", tenure: "", departure: "", successor: "", successorRole: "", context: "" });
+  const [f, setF] = useState({ name: "", role: "", team: "", tenure: "", departure: "", language: "en-US", successor: "", successorRole: "", context: "" });
   const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
 
   const defaultDeparture = () => {
     const d = new Date(Date.now() + 45 * 86400000);
@@ -74,6 +75,7 @@ export function NewCapture() {
           team: f.team.trim() || undefined,
           tenureYears: f.tenure ? Number(f.tenure) : undefined,
           departureDate: f.departure || defaultDeparture(),
+          language: f.language || undefined,
         },
         successor: f.successor.trim() ? { name: f.successor.trim(), role: f.successorRole.trim() || undefined } : undefined,
         context: f.context.trim(),
@@ -89,9 +91,7 @@ export function NewCapture() {
 
   return (
     <div className="max-w-3xl">
-      <p className="text-[12px] uppercase tracking-[0.16em] text-muted font-semibold">New capture</p>
-      <h1 className="font-display text-[36px] leading-tight mt-2">Who is leaving, and what do they carry?</h1>
-      <p className="text-ink-2 mt-2 max-w-xl">Tacit plans a coverage map of knowledge domains from the role and context, then interviews the expert against it.</p>
+      <PageHeader eyebrow="New capture" title="Who is leaving, and what do they carry?" lede="Tacit plans a coverage map of knowledge domains from the role and context, then interviews the expert against it." />
 
       <div className="mt-5 flex flex-wrap items-center gap-2 text-[13px]">
         <span className="text-muted">Try an example:</span>
@@ -128,6 +128,15 @@ export function NewCapture() {
                 <Input type="date" value={f.departure} onChange={set("departure")} />
               </Field>
             </div>
+            <Field label="Interview language" hint="The expert is interviewed in their language; the knowledge base is always written in English." className="md:col-span-2">
+              <Select value={f.language} onChange={set("language")}>
+                {LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           </div>
         </Card>
 

@@ -11,6 +11,7 @@ const ExpertSchema = z.object({
   team: z.string().max(120).optional(),
   tenureYears: z.number().min(0).max(80).optional(),
   departureDate: z.string().max(20).optional(),
+  language: z.string().max(12).optional(),
 });
 const SuccessorSchema = z.object({ name: z.string().min(1).max(120), role: z.string().max(160).optional() });
 const CreateCaptureSchema = z.object({

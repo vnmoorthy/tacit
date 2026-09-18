@@ -4,7 +4,7 @@ import { buildGraph, type GraphData } from "./graph.js";
 import { compileHandover } from "./handover.js";
 import { newId, nowIso } from "./ids.js";
 import type { Embedder } from "./llm.js";
-import { INTERVIEWER_PERSONA, captureBrief, coverageBrief } from "./prompts.js";
+import { INTERVIEWER_PERSONA, captureBrief, coverageBrief, isEnglish, languageName } from "./prompts.js";
 import { ensureEmbeddings, retrieve } from "./retrieval.js";
 import type { Store } from "./store.js";
 import { wordCount } from "./text.js";
@@ -406,6 +406,7 @@ export class Engine {
         ? `\nThe successor already asked these and got no answer — ask them early, in the expert's language:\n${successorQuestions.map((q) => `- ${q.text}`).join("\n")}`
         : "",
       suggested ? `\nOpen by greeting ${capture.expert.name.split(" ")[0]} in one sentence, then ask: "${suggested.question}"` : "",
+      !isEnglish(capture.expert.language) ? `\nConduct the entire conversation in ${languageName(capture.expert.language)} (translate the questions above). If the expert switches language, follow them.` : "",
       "\nAsk exactly one question per turn. Keep every turn under 45 words.",
     ]
       .filter((l) => l !== "")
