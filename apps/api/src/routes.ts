@@ -49,6 +49,7 @@ export function buildRoutes(engine: Engine, meta: { version: string; notes: stri
   });
   api.get("/captures/:id/export", async (c) => c.json(await engine.exportCapture(c.req.param("id"))));
   api.get("/captures/:id/handover", async (c) => c.json({ markdown: await engine.handover(c.req.param("id")) }));
+  api.get("/captures/:id/graph", async (c) => c.json(await engine.graph(c.req.param("id"))));
   api.get("/captures/:id/instructions", async (c) => c.json({ instructions: await engine.interviewerInstructions(c.req.param("id")) }));
 
   /* sessions */

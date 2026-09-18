@@ -17,6 +17,16 @@ Expert's phone ──PSTN──▶ Twilio number ──SIP trunk──▶ LiveKi
 2. Create an **Elastic SIP Trunk** (Twilio Console → Elastic SIP Trunking → Trunks). Note the trunk's termination URI (`yourtrunk.pstn.twilio.com`) and add a credential list (username + password).
 3. Associate the number with the trunk.
 
+## Shortcut: one command
+
+With `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` in `.env`, run:
+
+```bash
+node scripts/phone-setup.mjs
+```
+
+It creates the Twilio trunk + credential list, attaches your number, creates the LiveKit outbound trunk and writes `LIVEKIT_SIP_TRUNK_ID` to `.env`. Steps 1–2 below are what it automates.
+
 ## 2. LiveKit
 
 1. Create a project at cloud.livekit.io; copy `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.

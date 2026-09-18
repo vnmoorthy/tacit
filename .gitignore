@@ -11,3 +11,8 @@ build
 coverage
 .vite
 frontend.zip
+
+# python
+**/.venv
+__pycache__
+*.pyc

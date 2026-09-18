@@ -1,4 +1,4 @@
-import { Bot, Brain, FileText, LayoutGrid, MessageSquareText, Mic, Plus, Settings as SettingsIcon, Sparkles } from "lucide-react";
+import { Bot, Brain, FileText, LayoutGrid, MessageSquareText, Mic, Orbit, Plus, Settings as SettingsIcon, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useMatch } from "react-router-dom";
 import type { Capture } from "@tacit/core";
@@ -85,6 +85,7 @@ export function Layout() {
               <NavItem to={`/c/${captureId}/interview`} icon={<Mic className="h-4 w-4" />} label="Interview" />
               <NavItem to={`/c/${captureId}/knowledge`} icon={<Brain className="h-4 w-4" />} label="Knowledge" />
               <NavItem to={`/c/${captureId}/ask`} icon={<MessageSquareText className="h-4 w-4" />} label="Ask the twin" />
+              <NavItem to={`/c/${captureId}/graph`} icon={<Orbit className="h-4 w-4" />} label="Constellation" />
               <NavItem to={`/c/${captureId}/handover`} icon={<FileText className="h-4 w-4" />} label="Handover doc" />
             </nav>
           </div>

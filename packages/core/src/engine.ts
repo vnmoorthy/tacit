@@ -1,5 +1,6 @@
 import type { Brain, NextQuestion } from "./brain.js";
 import { recomputeCapture, suggestNext } from "./coverage.js";
+import { buildGraph, type GraphData } from "./graph.js";
 import { compileHandover } from "./handover.js";
 import { newId, nowIso } from "./ids.js";
 import type { Embedder } from "./llm.js";
@@ -524,6 +525,12 @@ export class Engine {
   }
 
   /* ───────────────────────── documents ───────────────────────── */
+
+  async graph(captureId: ID): Promise<GraphData> {
+    const capture = await this.getCapture(captureId);
+    const atoms = await this.store.listAtoms(captureId);
+    return buildGraph(capture, atoms);
+  }
 
   async handover(captureId: ID): Promise<string> {
     const b = await this.exportCapture(captureId);

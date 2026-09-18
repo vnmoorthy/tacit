@@ -7,6 +7,7 @@ import { Layout } from "./components/Layout.js";
 import { Ask } from "./pages/Ask.js";
 import { CaptureOverview } from "./pages/CaptureOverview.js";
 import { Dashboard } from "./pages/Dashboard.js";
+import { Graph } from "./pages/Graph.js";
 import { Handover } from "./pages/Handover.js";
 import { InterviewRoom } from "./pages/InterviewRoom.js";
 import { Knowledge } from "./pages/Knowledge.js";
@@ -30,6 +31,7 @@ const router = createBrowserRouter([
         ],
       },
       { path: "/c/:id/interview", element: <InterviewRoom /> },
+      { path: "/c/:id/graph", element: <Graph /> },
     ],
   },
 ], { basename: import.meta.env.BASE_URL.replace(/\/$/, "") || undefined });

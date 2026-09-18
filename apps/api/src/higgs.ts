@@ -39,11 +39,17 @@ export async function createHiggsSession(opts: { apiKey: string; instructions: s
 export async function higgsSpeech(opts: { apiKey: string; text: string; voice?: string; format?: "mp3" | "wav" | "pcm" | "opus"; baseUrl?: string }): Promise<{ bytes: ArrayBuffer; contentType: string }> {
   const base = (opts.baseUrl ?? "https://api.boson.ai").replace(/\/$/, "");
   const format = opts.format ?? "mp3";
-  const res = await fetch(`${base}/v1/audio/speech`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${opts.apiKey}`, "content-type": "application/json" },
-    body: JSON.stringify({ model: "higgs-tts-3", input: opts.text, voice: opts.voice || "default", response_format: format }),
-  });
+  const call = () =>
+    fetch(`${base}/v1/audio/speech`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${opts.apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ model: "higgs-tts-3", input: opts.text, voice: opts.voice || "default", response_format: format }),
+    });
+  let res = await call();
+  if (res.status === 429) {
+    await new Promise((r) => setTimeout(r, 1500));
+    res = await call();
+  }
   if (!res.ok) throw new Error(`Higgs TTS failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
   const ct = format === "mp3" ? "audio/mpeg" : format === "wav" ? "audio/wav" : format === "opus" ? "audio/ogg" : "application/octet-stream";
   return { bytes: await res.arrayBuffer(), contentType: res.headers.get("content-type") ?? ct };

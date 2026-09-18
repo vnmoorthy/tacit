@@ -1,5 +1,6 @@
 import type {
   AskResult,
+  GraphData,
   Atom,
   Capture,
   CaptureBundle,
@@ -54,6 +55,7 @@ export interface ApiClient {
   deleteCapture(id: string): Promise<void>;
   exportCapture(id: string): Promise<CaptureBundle>;
   handover(id: string): Promise<string>;
+  graph(id: string): Promise<GraphData>;
   instructions(id: string): Promise<string>;
   listSessions(id: string): Promise<Session[]>;
   startSession(id: string, mode: SessionMode): Promise<{ session: Session; interviewerTurn: Turn; capture: Capture }>;
@@ -140,6 +142,9 @@ export class HttpApiClient implements ApiClient {
   }
   async handover(id: string) {
     return (await this.req<{ markdown: string }>(`/captures/${id}/handover`)).markdown;
+  }
+  graph(id: string) {
+    return this.req<GraphData>(`/captures/${id}/graph`);
   }
   async instructions(id: string) {
     return (await this.req<{ instructions: string }>(`/captures/${id}/instructions`)).instructions;

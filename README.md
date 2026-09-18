@@ -71,8 +71,9 @@ Companies know this. Fortune 500s lose an estimated **$31.5B a year** from faili
 - **Voice cloning**: with the expert's consent, Higgs Audio clones their voice from the interview so the twin speaks like them.
 - **Phone interviews**: Tacit calls the expert (Twilio SIP → LiveKit → Higgs Realtime agent). See [docs/PHONE.md](docs/PHONE.md).
 - **Handover document** compiled from everything captured (Markdown → Confluence/Notion/PDF).
+- **The Constellation**: a 3D knowledge graph of atoms, domains and the people and systems they mention, with bloom and particle flows. Steer it with your hands through the camera (point to reveal, pinch to grab, open palm to orbit, two hands to zoom; on-device MediaPipe hand tracking) and ask it questions by voice: the cited atoms light up while the camera flies to them.
 - **Runs anywhere**: any OpenAI-compatible LLM (Nebius first-class), Anthropic, local Ollama, or an offline demo brain. The same engine runs fully in the browser, so the [live demo](https://vnmoorthy.github.io/tacit/) works with no backend at all.
-- **Zero native dependencies**: Node's built-in SQLite, one Docker image, 14 tests.
+- **Zero native dependencies**: Node's built-in SQLite, one Docker image, 19 tests.
 
 ## Quickstart
 
@@ -95,7 +96,7 @@ If [Ollama](https://ollama.com) is running locally it's auto-detected (`llama3.1
 
 ```bash
 pnpm seed         # load sample captures into SQLite
-pnpm test         # 14 tests across core + api
+pnpm test         # 19 tests across core + api
 pnpm build        # production web build (served by the API)
 ```
 
@@ -131,6 +132,17 @@ Two interchangeable brains implement the same interface:
 | **Browser voice** | Web Speech recognition (1.6 s end-of-turn) → API → `speechSynthesis`. | Always available in Chrome/Edge/Safari |
 | **Higgs Audio** | `/v1/audio/speech` for the twin's spoken answers; `/v1/audio/voices` clones the expert from a reference clip recorded during a browser-voice session. | `BOSON_API_KEY` set |
 | **Phone** | Twilio SIP trunk → LiveKit room → `services/phone-agent` (LiveKit Agents) on Higgs Realtime → Tacit API. | LiveKit + Twilio configured |
+
+### The Constellation (`apps/web/src/pages/Graph.tsx`)
+
+<p align="center"><img src="docs/assets/graph-answer.png" alt="The Constellation: a 3D knowledge graph lighting up the atoms cited by the twin's answer" width="100%" /><br/><sub>Ask "the ACH file bounced on a Friday afternoon, what do I do?" and the cited atoms glow while particles run along their links. Hand gestures via MediaPipe: ☝️ point · 🤏 pinch to grab · ✋ orbit · 🙌 zoom.</sub></p>
+
+| Piece | How |
+|---|---|
+| Graph | `buildGraph()` in core: domain hubs, atom nodes coloured by type, entity nodes for people, tools and teams (from tags), `in` / `mentions` / `related` links (BM25 neighbours). Served at `GET /captures/:id/graph`; also built in-browser in standalone mode. |
+| Rendering | `3d-force-graph` + three.js, UnrealBloom post-processing, sprite labels, directional particles on highlighted links. |
+| Hands | `@mediapipe/tasks-vision` Hand Landmarker (WASM, on-device, two hands). Gestures are derived from landmark geometry and unit-tested. Fingertip → screen → nearest node; pinch fixes the node's position and reheats the simulation; palm velocity orbits the camera; inter-hand distance zooms. |
+| Voice | Same twin as the Ask page: speech in, grounded answer out, spoken back (Higgs Audio when available), citations highlighted and framed. |
 
 ### Atom types
 

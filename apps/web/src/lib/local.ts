@@ -131,6 +131,7 @@ export function createLocalClient(): ApiClient {
     deleteCapture: (id: string) => engine.deleteCapture(id),
     exportCapture: (id: string) => engine.exportCapture(id),
     handover: (id: string) => engine.handover(id),
+    graph: (id: string) => engine.graph(id),
     instructions: (id: string) => engine.interviewerInstructions(id),
     listSessions: (id: string) => engine.listSessions(id),
     startSession: (id: string, m: SessionMode) => engine.startSession(id, m),

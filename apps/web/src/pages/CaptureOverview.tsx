@@ -1,4 +1,4 @@
-import { AlertCircle, Clock, FileText, MessageSquareText, Mic, MoreHorizontal, Phone, Plus, Trash2, Volume2 } from "lucide-react";
+import { AlertCircle, Clock, FileText, MessageSquareText, Mic, MoreHorizontal, Orbit, Phone, Plus, Trash2, Volume2 } from "lucide-react";
 import { BlobPlayer } from "../lib/voice/player.js";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -48,10 +48,14 @@ export function CaptureOverview() {
     setPreviewing(true);
     try {
       const first = capture.expert.name.split(" ")[0];
-      const blob = await api.speak(`Hi, this is ${first}'s knowledge twin. Ask me anything about ${capture.expert.role.toLowerCase()} and I'll answer from what ${first} actually said.`, capture.id);
-      await new BlobPlayer().play(blob);
-    } catch (e) {
-      toast((e as Error).message, "error");
+      const line = `Hi, this is ${first}'s knowledge twin. Ask me anything about ${capture.expert.role.toLowerCase()} and I'll answer from what ${first} actually said.`;
+      try {
+        await new BlobPlayer().play(await api.speak(line, capture.id));
+      } catch (e) {
+        toast(`Higgs voice busy (${(e as Error).message.slice(0, 60)}…); using browser voice.`, "info");
+        const u = new SpeechSynthesisUtterance(line);
+        window.speechSynthesis?.speak(u);
+      }
     } finally {
       setPreviewing(false);
     }
@@ -142,6 +146,9 @@ export function CaptureOverview() {
           </Button>
           <Button size="lg" icon={<FileText className="h-4 w-4" />} onClick={() => nav(`/c/${id}/handover`)}>
             Handover doc
+          </Button>
+          <Button size="lg" icon={<Orbit className="h-4 w-4" />} onClick={() => nav(`/c/${id}/graph`)} title="3D knowledge graph you can steer with your hands">
+            Constellation
           </Button>
           <Button
             size="lg"
