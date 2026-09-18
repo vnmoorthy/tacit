@@ -4,8 +4,8 @@ build
 .env
 .env.local
 *.local
-data/*.db
-data/*.db-*
+**/data/*.db
+**/data/*.db-*
 .DS_Store
 *.log
 coverage
