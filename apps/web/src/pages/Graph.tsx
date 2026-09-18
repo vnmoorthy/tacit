@@ -3,7 +3,8 @@
  * Point to explore, pinch to grab and drag, open palm to orbit, two hands to zoom. Ask by voice
  * and the cited atoms light up while the camera flies to them.
  */
-import { ArrowLeft, Camera, CameraOff, Hand, Mic, MicOff, PictureInPicture2, RotateCcw, ScanFace, Sparkles, Volume2 } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Circle, Hand, Mic, MicOff, PictureInPicture2, RotateCcw, ScanFace, Sparkles, Square, Volume2 } from "lucide-react";
+import { ATOM_TYPES, BM25 } from "@tacit/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { AskResult, Capture, GraphData, GraphLink, GraphNode } from "@tacit/core";
@@ -92,6 +93,18 @@ export function Graph() {
   const [mode, setMode] = useState<Mode>("off");
   const [fps, setFps] = useState(0);
   const [typed, setTyped] = useState("");
+  const [voiceOn, setVoiceOn] = useState(false);
+  const voiceOnRef = useRef(false);
+  const [hud, setHud] = useState<string | null>(null);
+  const hudTimer = useRef(0);
+  const [recording, setRecording] = useState(false);
+  const recorder = useRef<MediaRecorder | null>(null);
+  const recChunks = useRef<Blob[]>([]);
+  const say = (text: string) => {
+    setHud(text);
+    window.clearTimeout(hudTimer.current);
+    hudTimer.current = window.setTimeout(() => setHud(null), 2600);
+  };
   const modeRef = useRef<Mode>("off");
   const setModeSafe = (m: Mode) => {
     if (modeRef.current !== m) {
@@ -546,12 +559,17 @@ export function Graph() {
           flyTo(cited, 150, 1500);
         } else setHighlight(null);
         const plain = r.answer.replace(/\[\d+\]/g, "").replace(/[*#>_`]/g, "").replace(/\s+/g, " ").trim().slice(0, 600);
+        voice.current?.stopListening();
+        const resume = () => {
+          if (voiceOnRef.current) voice.current?.listen();
+        };
         if (health?.higgs) {
           api
             .speak(plain, id)
             .then((b) => player.current.play(b))
-            .catch(() => voice.current?.speak(plain));
-        } else void voice.current?.speak(plain);
+            .catch(() => voice.current?.speak(plain))
+            .finally(resume);
+        } else void voice.current?.speak(plain).finally(resume);
       } catch (e) {
         toast((e as Error).message, "error");
       } finally {
@@ -560,6 +578,114 @@ export function Graph() {
     },
     [api, capture, flyTo, health?.higgs, id, setHighlight, toast],
   );
+
+  /* ───────────────────────── voice control ───────────────────────── */
+  type Command =
+    | { kind: "reset" }
+    | { kind: "zoom"; factor: number }
+    | { kind: "rotate"; dAz: number; dPolar: number }
+    | { kind: "immersive"; on: boolean }
+    | { kind: "camera"; on: boolean }
+    | { kind: "show"; target: string }
+    | { kind: "question"; text: string };
+
+  const parseCommand = (raw: string): Command => {
+    const t = raw.toLowerCase().replace(/[.,!?]+$/g, "").replace(/^(tacit|hey tacit|ok tacit)[,\s]+/, "").trim();
+    if (/^(reset|start over|show everything|zoom to fit|fit)$/.test(t)) return { kind: "reset" };
+    if (/^(zoom in|closer|come closer|move in|zoom)$/.test(t)) return { kind: "zoom", factor: 0.7 };
+    if (/^(zoom out|farther|further|move out|back up|pull back)$/.test(t)) return { kind: "zoom", factor: 1.4 };
+    const rot = t.match(/^(rotate|spin|turn|orbit)\s*(left|right|up|down)?$/);
+    if (rot) {
+      const d = rot[2] ?? "right";
+      return { kind: "rotate", dAz: d === "left" ? 0.7 : d === "right" ? -0.7 : 0, dPolar: d === "up" ? -0.5 : d === "down" ? 0.5 : 0 };
+    }
+    if (/^(step inside|immersive|put me inside|go immersive)$/.test(t)) return { kind: "immersive", on: true };
+    if (/^(corner view|shrink (the )?camera|small camera)$/.test(t)) return { kind: "immersive", on: false };
+    if (/^(stop|turn off|disable)( the| my)? camera$/.test(t)) return { kind: "camera", on: false };
+    if (/^(use|turn on|enable|start)( my| the)? (hands|camera)$/.test(t)) return { kind: "camera", on: true };
+    const show = t.match(/^(?:show|highlight|find|light up|where (?:is|are)|go to|focus on|open|select)\s+(?:me\s+)?(?:the\s+|all\s+|all the\s+)?(.+)$/);
+    if (show) return { kind: "show", target: show[1].trim() };
+    return { kind: "question", text: raw };
+  };
+
+  const TYPE_WORDS: Record<string, string> = { risk: "risk", risks: "risk", gotcha: "gotcha", gotchas: "gotcha", trap: "gotcha", traps: "gotcha", contact: "contact", contacts: "contact", people: "contact", person: "person", tool: "tool", tools: "tool", system: "tool", systems: "tool", procedure: "procedure", procedures: "procedure", step: "procedure", steps: "procedure", rule: "rule", rules: "rule", decision: "decision", decisions: "decision", story: "story", stories: "story", glossary: "glossary", term: "glossary", terms: "glossary", domain: "domain", domains: "domain", team: "team", teams: "team" };
+
+  const showTarget = (target: string) => {
+    const nodes = nodesRef.current;
+    const key = target.toLowerCase();
+    // 1. an atom type / node group
+    const group = TYPE_WORDS[key] ?? (ATOM_TYPES as string[]).find((x) => x === key);
+    if (group) {
+      const ids = nodes.filter((n) => n.group === group).map((n) => n.id);
+      if (ids.length) {
+        setSelected(null);
+        selectedRef.current = null;
+        setAnswer(null);
+        setHighlight(ids);
+        flyTo(ids, 190, 1200);
+        say(`Showing ${ids.length} ${group}${ids.length === 1 ? "" : group === "glossary" ? " terms" : "s"}`);
+        return;
+      }
+    }
+    // 2. a domain by name
+    const dom = nodes.find((n) => n.kind === "domain" && (n.label.toLowerCase().includes(key) || key.includes(n.label.toLowerCase().split(" ")[0])));
+    if (dom) {
+      select(dom);
+      say(`Focusing on ${dom.label}`);
+      return;
+    }
+    // 3. best node by label search
+    const bm = new BM25(nodes.map((n) => ({ id: n.id, text: `${n.label} ${n.snippet ?? ""}` })));
+    const hit = bm.search(key, 1)[0];
+    const node = hit ? nodes.find((n) => n.id === hit.id) : undefined;
+    if (node && hit.score > 0.5) {
+      select(node);
+      say(`Focusing on ${node.label}`);
+      return;
+    }
+    say(`Nothing matched “${target}” — asking the twin`);
+    void ask(target);
+  };
+
+  const runCommand = async (c: Command) => {
+    switch (c.kind) {
+      case "reset":
+        reset();
+        say("Reset");
+        break;
+      case "zoom":
+        orbit(0, 0, c.factor);
+        say(c.factor < 1 ? "Zooming in" : "Zooming out");
+        break;
+      case "rotate":
+        for (let i = 0; i < 12; i++) {
+          orbit(c.dAz / 12, c.dPolar / 12);
+          await new Promise((r) => setTimeout(r, 30));
+        }
+        say("Rotating");
+        break;
+      case "immersive":
+        if (immersive !== c.on) await toggleImmersive();
+        say(c.on ? "Stepping inside" : "Corner view");
+        break;
+      case "camera":
+        if (camOn !== c.on) await toggleCamera();
+        break;
+      case "show":
+        showTarget(c.target);
+        break;
+      case "question":
+        say(`Asking: “${c.text}”`);
+        await ask(c.text);
+        break;
+    }
+  };
+
+  const handleUtterance = async (text: string) => {
+    const t = text.trim();
+    if (!t) return;
+    await runCommand(parseCommand(t));
+  };
 
   const toggleMic = async () => {
     if (!BrowserVoice.recognitionSupported()) {
@@ -572,8 +698,9 @@ export function Graph() {
           onPartial: setHeard,
           onFinal: (t) => {
             setHeard("");
-            setListening(false);
-            void ask(t);
+            void handleUtterance(t).finally(() => {
+              if (voiceOnRef.current) voice.current?.listen();
+            });
           },
           onState: (s) => setListening(s === "listening"),
           onLevel: () => undefined,
@@ -582,8 +709,13 @@ export function Graph() {
         await v.init();
         voice.current = v;
       }
-      if (listening) voice.current.stopListening();
-      else voice.current.listen();
+      const next = !voiceOnRef.current;
+      voiceOnRef.current = next;
+      setVoiceOn(next);
+      if (next) {
+        voice.current.listen();
+        say("Listening — say “show me the risks”, “zoom in”, or ask a question");
+      } else voice.current.stopListening();
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -606,6 +738,35 @@ export function Graph() {
     },
     [],
   );
+
+  const toggleRecording = () => {
+    const g = graphRef.current;
+    if (!g) return;
+    if (recording) {
+      recorder.current?.stop();
+      return;
+    }
+    const canvas: HTMLCanvasElement = g.renderer().domElement;
+    const stream = canvas.captureStream(30);
+    const mime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined);
+    recChunks.current = [];
+    rec.ondataavailable = (e) => e.data.size && recChunks.current.push(e.data);
+    rec.onstop = () => {
+      const blob = new Blob(recChunks.current, { type: mime || "video/webm" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `tacit-constellation-${Date.now()}.${mime.includes("mp4") ? "mp4" : "webm"}`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      setRecording(false);
+      say("Clip saved to your downloads");
+    };
+    rec.start(500);
+    recorder.current = rec;
+    setRecording(true);
+    say("Recording the constellation");
+  };
 
   const reset = () => {
     select(null);
@@ -658,7 +819,7 @@ export function Graph() {
               const q = typed.trim();
               if (!q) return;
               setTyped("");
-              void ask(q);
+              void handleUtterance(q);
             }}
           >
             <input
@@ -668,10 +829,13 @@ export function Graph() {
               aria-label="Ask a question"
               className="h-8 w-44 rounded-full border border-white/15 bg-white/5 px-3 text-[13px] text-paper placeholder:text-paper/40 focus:outline-none focus:border-accent-2/60 md:w-56"
             />
-            <Button type="button" size="sm" variant={listening ? "accent" : "secondary"} onClick={toggleMic} loading={asking} icon={listening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />} title="Ask by voice">
-              {listening ? "Listening…" : "Voice"}
+            <Button type="button" size="sm" variant={voiceOn ? "accent" : "secondary"} onClick={toggleMic} loading={asking} icon={voiceOn ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />} title="Voice control: commands and questions">
+              {voiceOn ? (listening ? "Listening…" : "Voice on") : "Voice"}
             </Button>
           </form>
+          <Button type="button" size="sm" variant={recording ? "danger" : "ghost"} className={recording ? "" : "text-paper/80 hover:bg-white/10 hover:text-paper"} onClick={toggleRecording} icon={recording ? <Square className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5 text-danger" />} title="Record a clip of the constellation (with your camera backdrop when inside)">
+            {recording ? "Stop" : "Record"}
+          </Button>
           <Button size="sm" variant="ghost" className="text-paper/70 hover:text-paper hover:bg-white/10" onClick={reset} icon={<RotateCcw className="h-3.5 w-3.5" />}>
             Reset
           </Button>
@@ -692,6 +856,7 @@ export function Graph() {
         <div ref={cursorRef} className="pointer-events-none absolute left-0 top-0 h-7 w-7 rounded-full border-2 opacity-0 transition-opacity" style={{ boxShadow: "0 0 18px 4px rgba(232,179,107,.45)", borderColor: "#f6e3c3" }} />
 
         {heard && <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-[14px] backdrop-blur">{heard}…</div>}
+        {hud && !heard && <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 rounded-full border border-accent-2/40 bg-ink/80 px-4 py-2 text-[13.5px] text-accent-2 shadow-lift backdrop-blur rise-in">{hud}</div>}
 
         {/* details / answer panel */}
         {(selected || answer) && (
@@ -775,6 +940,7 @@ export function Graph() {
           </div>
           <div className="rounded-xl bg-black/40 px-3 py-2 text-[11px] text-paper/60 backdrop-blur">
             {camOn ? "☝️ point to reveal · 🤏 pinch a node to grab it, pinch space to turn · ✋ open palm to orbit · 🙌 two hands to zoom" : "Drag to orbit · scroll to zoom · click a node · or turn on your camera and use your hands"}
+            <br />🎙 say “show me the risks”, “focus on Kevin Tran”, “zoom in”, “rotate left”, “step inside”, “reset”, or ask anything
           </div>
         </div>
       </div>

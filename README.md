@@ -149,7 +149,8 @@ Two interchangeable brains implement the same interface:
 | Rendering | `3d-force-graph` + three.js, UnrealBloom post-processing, sprite labels, directional particles on highlighted links. |
 | Hands | `@mediapipe/tasks-vision` Hand Landmarker (WASM, on-device, two hands). Gestures are derived from landmark geometry and unit-tested. Fingertip → screen → nearest node; pinch fixes the node's position and reheats the simulation; pinching empty space or an open palm orbits the camera; inter-hand distance zooms. |
 | Immersive | "Step inside": the mirrored camera feed becomes the scene background (three.js `VideoTexture`) under a camera-locked veil, with the hand skeleton drawn full-screen, so the presenter stands in the constellation. |
-| Voice | Same twin as the Ask page: speech in, grounded answer out, spoken back (Higgs Audio when available), citations highlighted and framed. |
+| Voice | Continuous listening with a small command grammar: "show me the risks", "focus on Kevin Tran", "zoom in", "rotate left", "step inside", "reset". Anything else is a question for the twin: grounded answer, spoken back (Higgs Audio when available), cited atoms highlighted and framed. Listening pauses while the twin speaks. |
+| Record | One button records the constellation (with your camera backdrop when inside) from the WebGL canvas to a video file. |
 
 ### Atom types
 
