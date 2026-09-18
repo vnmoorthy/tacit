@@ -20,5 +20,8 @@
     "onlyBuiltDependencies": [
       "esbuild"
     ]
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
   }
 }
