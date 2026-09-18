@@ -28,6 +28,11 @@
   <a href="slides/Tacit.pptx">Slides</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/vnmoorthy/tacit/raw/main/docs/assets/tacit-demo.mp4"><img src="docs/assets/constellation.gif" alt="Tacit demo: the constellation lighting up the atoms behind an answer" width="100%" /></a><br/>
+  <sub>▶ <a href="https://github.com/vnmoorthy/tacit/raw/main/docs/assets/tacit-demo.mp4">Watch the 2-minute product walkthrough</a> (narrated by Higgs Audio).</sub>
+</p>
+
 ---
 
 ## The problem
@@ -69,9 +74,10 @@ Companies know this. Fortune 500s lose an estimated **$31.5B a year** from faili
 - **The successor twin**: hybrid retrieval (BM25 + embeddings, RRF-fused), grounded answers with `[n]` citations, confidence gating.
 - **The closed loop**: unanswered successor questions are queued and asked first next session.
 - **Voice cloning**: with the expert's consent, Higgs Audio clones their voice from the interview so the twin speaks like them.
+- **Multilingual interviews**: the expert is interviewed in their own language (Spanish, Tamil, Mandarin, 18 presets, Higgs supports 100+) while every atom is written in English with the verbatim quote preserved.
 - **Phone interviews**: Tacit calls the expert (Twilio SIP → LiveKit → Higgs Realtime agent). See [docs/PHONE.md](docs/PHONE.md).
 - **Handover document** compiled from everything captured (Markdown → Confluence/Notion/PDF).
-- **The Constellation**: a 3D knowledge graph of atoms, domains and the people and systems they mention, with bloom and particle flows. Steer it with your hands through the camera (point to reveal, pinch to grab, open palm to orbit, two hands to zoom; on-device MediaPipe hand tracking) and ask it questions by voice: the cited atoms light up while the camera flies to them.
+- **The Constellation**: a 3D knowledge graph of atoms, domains and the people and systems they mention, with bloom and particle flows. Steer it with your hands through the camera (point to reveal, pinch to grab, open palm to orbit, two hands to zoom; on-device MediaPipe hand tracking), step *inside* it with your live camera as the backdrop, and ask it questions by voice: the cited atoms light up while the camera flies to them.
 - **Runs anywhere**: any OpenAI-compatible LLM (Nebius first-class), Anthropic, local Ollama, or an offline demo brain. The same engine runs fully in the browser, so the [live demo](https://vnmoorthy.github.io/tacit/) works with no backend at all.
 - **Zero native dependencies**: Node's built-in SQLite, one Docker image, 19 tests.
 
@@ -141,7 +147,8 @@ Two interchangeable brains implement the same interface:
 |---|---|
 | Graph | `buildGraph()` in core: domain hubs, atom nodes coloured by type, entity nodes for people, tools and teams (from tags), `in` / `mentions` / `related` links (BM25 neighbours). Served at `GET /captures/:id/graph`; also built in-browser in standalone mode. |
 | Rendering | `3d-force-graph` + three.js, UnrealBloom post-processing, sprite labels, directional particles on highlighted links. |
-| Hands | `@mediapipe/tasks-vision` Hand Landmarker (WASM, on-device, two hands). Gestures are derived from landmark geometry and unit-tested. Fingertip → screen → nearest node; pinch fixes the node's position and reheats the simulation; palm velocity orbits the camera; inter-hand distance zooms. |
+| Hands | `@mediapipe/tasks-vision` Hand Landmarker (WASM, on-device, two hands). Gestures are derived from landmark geometry and unit-tested. Fingertip → screen → nearest node; pinch fixes the node's position and reheats the simulation; pinching empty space or an open palm orbits the camera; inter-hand distance zooms. |
+| Immersive | "Step inside": the mirrored camera feed becomes the scene background (three.js `VideoTexture`) under a camera-locked veil, with the hand skeleton drawn full-screen, so the presenter stands in the constellation. |
 | Voice | Same twin as the Ask page: speech in, grounded answer out, spoken back (Higgs Audio when available), citations highlighted and framed. |
 
 ### Atom types
@@ -202,7 +209,7 @@ All endpoints are JSON under `/api`. Full reference in [docs/API.md](docs/API.md
 
 ## Built at
 
-**Build an AI Startup in One Day**, an [Open Source for AI](https://luma.com/oss4ai) hackathon in San Francisco — Voice AI track. Partner technology used: **Boson AI** (Higgs Realtime, Higgs Audio), **Nebius** Token Factory (inference + embeddings), with LiveKit + Twilio for telephony. Slides in [`slides/`](slides/), demo script in [docs/DEMO.md](docs/DEMO.md).
+**Build an AI Startup in One Day**, an [Open Source for AI](https://luma.com/oss4ai) hackathon in San Francisco (Voice AI track), and the **Boson Higgs Audio Hackathon 2026** (tracks: Voice at Work · Agents That Act · Breaking the Language Barrier). Partner technology used: **Boson AI** (Higgs Realtime, Higgs Audio TTS + voice cloning), **Nebius** Token Factory (inference + embeddings), with LiveKit + Twilio for telephony. Slides in [`slides/`](slides/), demo script in [docs/DEMO.md](docs/DEMO.md), submission kit in [docs/SUBMISSION.md](docs/SUBMISSION.md).
 
 ## Contributing
 
