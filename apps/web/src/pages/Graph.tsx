@@ -240,7 +240,7 @@ export function Graph() {
       linksRef.current = links;
       const g = new (ForceGraph3D as any)(el, { controlType: "orbit" });
       graphRef.current = g;
-      g.backgroundColor("#0e0d0b")
+      g.backgroundColor("#0e1013")
         .showNavInfo(false)
         .width(el.clientWidth)
         .height(el.clientHeight)
@@ -378,7 +378,7 @@ export function Graph() {
       im.plane.geometry.dispose();
       im.plane.material.dispose();
       im.tex.dispose();
-      g?.backgroundColor("#0e0d0b");
+      g?.backgroundColor("#0e1013");
     } catch {
       /* ignore */
     }
@@ -801,14 +801,14 @@ export function Graph() {
   ];
 
   return (
-    <div className="relative flex h-screen flex-col bg-[#0e0d0b] text-paper">
-      <header className="z-10 flex items-center gap-3 border-b border-white/10 px-5 py-3">
-        <Link to={`/c/${id}`} className="inline-flex items-center gap-1.5 text-[13px] text-paper/60 hover:text-paper">
+    <div className="relative flex h-screen flex-col bg-paper text-ink">
+      <header className="z-10 flex items-center gap-3 border-b border-line px-5 py-3">
+        <Link to={`/c/${id}`} className="inline-flex items-center gap-1.5 text-[13px] text-ink-2 hover:text-ink">
           <ArrowLeft className="h-4 w-4" /> {capture?.expert.name ?? "Back"}
         </Link>
         <span className="font-display text-[20px]">Constellation</span>
         {data && (
-          <span className="hidden text-[12.5px] text-paper/50 md:inline">
+          <span className="hidden text-[12.5px] text-muted md:inline">
             {data.stats.atoms} atoms · {data.stats.domains} domains · {data.stats.entities} people & systems · {data.stats.links} links
           </span>
         )}
@@ -820,7 +820,7 @@ export function Graph() {
             {camOn ? "Stop camera" : "Use my hands"}
           </Button>
           {camOn && (
-            <Button size="sm" variant="ghost" className="text-paper/80 hover:bg-white/10 hover:text-paper" onClick={toggleImmersive} icon={immersive ? <PictureInPicture2 className="h-3.5 w-3.5" /> : <ScanFace className="h-3.5 w-3.5" />} title={immersive ? "Shrink the camera to a corner tile" : "Put yourself inside the constellation"}>
+            <Button size="sm" variant="ghost" className="text-ink-2 hover:bg-paper-3 hover:text-ink" onClick={toggleImmersive} icon={immersive ? <PictureInPicture2 className="h-3.5 w-3.5" /> : <ScanFace className="h-3.5 w-3.5" />} title={immersive ? "Shrink the camera to a corner tile" : "Put yourself inside the constellation"}>
               {immersive ? "Corner view" : "Step inside"}
             </Button>
           )}
@@ -839,16 +839,16 @@ export function Graph() {
               onChange={(e) => setTyped(e.target.value)}
               placeholder={`Ask ${first}…`}
               aria-label="Ask a question"
-              className="h-8 w-44 rounded-full border border-white/15 bg-white/5 px-3 text-[13px] text-paper placeholder:text-paper/40 focus:outline-none focus:border-accent-2/60 md:w-56"
+              className="h-8 w-44 rounded-full border border-line-2 bg-paper-2 px-3 text-[13px] text-ink placeholder:text-muted focus:outline-none focus:border-accent md:w-56"
             />
             <Button type="button" size="sm" variant={voiceOn ? "accent" : "secondary"} onClick={toggleMic} loading={asking} icon={voiceOn ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />} title="Voice control: commands and questions">
               {voiceOn ? (listening ? "Listening…" : "Voice on") : "Voice"}
             </Button>
           </form>
-          <Button type="button" size="sm" variant={recording ? "danger" : "ghost"} className={recording ? "" : "text-paper/80 hover:bg-white/10 hover:text-paper"} onClick={toggleRecording} icon={recording ? <Square className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5 text-danger" />} title="Record a clip of the constellation (with your camera backdrop when inside)">
+          <Button type="button" size="sm" variant={recording ? "danger" : "ghost"} className={recording ? "" : "text-ink-2 hover:bg-paper-3 hover:text-ink"} onClick={toggleRecording} icon={recording ? <Square className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5 text-danger" />} title="Record a clip of the constellation (with your camera backdrop when inside)">
             {recording ? "Stop" : "Record"}
           </Button>
-          <Button size="sm" variant="ghost" className="text-paper/70 hover:text-paper hover:bg-white/10" onClick={reset} icon={<RotateCcw className="h-3.5 w-3.5" />}>
+          <Button size="sm" variant="ghost" className="text-ink-2 hover:text-ink hover:bg-paper-3" onClick={reset} icon={<RotateCcw className="h-3.5 w-3.5" />}>
             Reset
           </Button>
         </div>
@@ -858,7 +858,7 @@ export function Graph() {
         <div ref={containerRef} className="absolute inset-0" />
         <canvas ref={fullOverlayRef} className={cx("pointer-events-none absolute inset-0 h-full w-full", camOn && immersive ? "opacity-90" : "opacity-0")} />
         {!ready && (
-          <div className="absolute inset-0 grid place-items-center text-paper/60">
+          <div className="absolute inset-0 grid place-items-center text-ink-2">
             <div className="flex items-center gap-3">
               <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-accent-2" /> Arranging {first ? `${first}'s` : "the"} knowledge…
             </div>
@@ -868,21 +868,21 @@ export function Graph() {
         <div ref={cursorRef} className="pointer-events-none absolute left-0 top-0 h-7 w-7 rounded-full border-2 opacity-0 transition-opacity" style={{ boxShadow: "0 0 18px 4px rgba(232,179,107,.45)", borderColor: "#f6e3c3" }} />
 
         {heard && <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-[14px] backdrop-blur">{heard}…</div>}
-        {hud && !heard && <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 rounded-full border border-accent-2/40 bg-ink/80 px-4 py-2 text-[13.5px] text-accent-2 shadow-lift backdrop-blur rise-in">{hud}</div>}
+        {hud && !heard && <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 rounded-full border border-accent/40 bg-paper-2/90 px-4 py-2 text-[13.5px] text-accent-2 shadow-lift backdrop-blur rise-in">{hud}</div>}
 
         {/* details / answer panel */}
         {(selected || answer) && (
-          <aside className="absolute right-4 top-4 w-[360px] max-h-[calc(100%-2rem)] overflow-y-auto scrollbar-thin rounded-2xl border border-white/10 bg-[#171512]/85 p-4 shadow-lift backdrop-blur rise-in">
+          <aside className="absolute right-4 top-4 w-[360px] max-h-[calc(100%-2rem)] overflow-y-auto scrollbar-thin rounded-xl border border-line-2 bg-paper-2/92 p-4 shadow-lift backdrop-blur rise-in">
             {answer && (
               <div>
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-paper/50 font-semibold">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted font-semibold">
                   <Sparkles className="h-3.5 w-3.5 text-accent-2" /> {first}'s twin
                   <Badge tone={answer.confidence === "high" ? "sage" : answer.confidence === "medium" ? "amber" : "danger"} className="ml-auto">
                     {answer.confidence}
                   </Badge>
                 </div>
-                <p className="mt-2 text-[13px] text-paper/60 italic">“{answer.question}”</p>
-                <div className="mt-2 text-[14px] text-paper [&_.prose-tacit]:text-paper [&_strong]:text-paper">
+                <p className="mt-2 text-[13px] text-ink-2 italic">“{answer.question}”</p>
+                <div className="mt-2 text-[14px] text-ink [&_.prose-tacit]:text-ink [&_strong]:text-ink">
                   <Markdown onCite={(n) => {
                     const c = answer.citations.find((x) => x.n === n);
                     const node = nodesRef.current.find((x) => x.id === c?.atomId);
@@ -894,8 +894,8 @@ export function Graph() {
                 {answer.citations.length > 0 && (
                   <ul className="mt-3 space-y-1 border-t border-white/10 pt-3">
                     {answer.citations.map((c) => (
-                      <li key={c.n} className="flex items-start gap-2 text-[12.5px] text-paper/80">
-                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent-2 font-mono text-[10px] font-semibold text-ink">{c.n}</span>
+                      <li key={c.n} className="flex items-start gap-2 text-[12.5px] text-ink-2">
+                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent font-mono text-[10px] font-semibold text-[#0e1013]">{c.n}</span>
                         <span>{c.title}</span>
                       </li>
                     ))}
@@ -913,12 +913,12 @@ export function Graph() {
                     <Badge tone="neutral">{selected.kind === "domain" ? "domain" : selected.group}</Badge>
                   )}
                   {selected.verified && <Badge tone="sage">verified</Badge>}
-                  {selected.confidence !== undefined && <span className="ml-auto font-mono text-[11px] text-paper/50">{Math.round(selected.confidence * 100)}%</span>}
+                  {selected.confidence !== undefined && <span className="ml-auto font-mono text-[11px] text-muted">{Math.round(selected.confidence * 100)}%</span>}
                 </div>
                 <h3 className="font-display mt-2 text-[19px] leading-snug">{selected.label}</h3>
-                {selected.snippet && <p className="mt-2 text-[13.5px] text-paper/75 leading-relaxed">{selected.snippet}</p>}
+                {selected.snippet && <p className="mt-2 text-[13.5px] text-ink-2 leading-relaxed">{selected.snippet}</p>}
                 {selected.kind !== "atom" && (
-                  <p className="mt-2 text-[13px] text-paper/60">
+                  <p className="mt-2 text-[13px] text-ink-2">
                     Connected to {linksRef.current.filter((l) => idOf(l.source) === selected.id || idOf(l.target) === selected.id).length} atoms.
                   </p>
                 )}
@@ -941,14 +941,14 @@ export function Graph() {
           muted
         />
         {/* camera PiP */}
-        <div className={cx("absolute bottom-4 left-4 overflow-hidden rounded-xl border border-white/15 bg-black/60 shadow-lift", camOn && !immersive ? "block" : "hidden")} style={{ width: 200, height: 150 }}>
+        <div className={cx("absolute bottom-4 left-4 overflow-hidden rounded-lg border border-line-2 bg-black/60 shadow-lift", camOn && !immersive ? "block" : "hidden")} style={{ width: 200, height: 150 }}>
           <canvas ref={overlayRef} width={200} height={150} className="absolute inset-0 h-full w-full" />
-          <div className="absolute bottom-1 left-2 text-[10.5px] text-paper/80">{MODE_TEXT[mode]}</div>
+          <div className="absolute bottom-1 left-2 text-[10.5px] text-ink-2">{MODE_TEXT[mode]}</div>
         </div>
 
         {/* legend + help */}
         <div className="pointer-events-none absolute bottom-4 right-4 flex flex-col items-end gap-2">
-          <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 rounded-xl bg-black/40 px-3 py-2 text-[11px] text-paper/70 backdrop-blur">
+          <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 rounded-xl bg-paper-2/80 px-3 py-2 text-[11px] text-ink-2 backdrop-blur">
             {legend.map(([k, label]) => (
               <span key={k} className="inline-flex items-center gap-1.5">
                 <span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORS[k], boxShadow: `0 0 6px ${COLORS[k]}` }} />
@@ -956,9 +956,9 @@ export function Graph() {
               </span>
             ))}
           </div>
-          <div className="rounded-xl bg-black/40 px-3 py-2 text-[11px] text-paper/60 backdrop-blur">
-            {camOn ? "☝️ point to reveal · 🤏 pinch a node to grab it, pinch space to turn · ✋ open palm to orbit · 🙌 two hands to zoom" : "Drag to orbit · scroll to zoom · click a node · or turn on your camera and use your hands"}
-            <br />🎙 say “show me the risks”, “focus on Kevin Tran”, “zoom in”, “rotate left”, “step inside”, “reset”, or ask anything
+          <div className="rounded-xl bg-paper-2/80 px-3 py-2 text-[11px] text-ink-2 backdrop-blur">
+            {camOn ? "Point to reveal · pinch a node to grab it, pinch space to turn · open palm to orbit · two hands to zoom" : "Drag to orbit · scroll to zoom · click a node · or turn on your camera and use your hands"}
+            <br />Voice: “show me the risks” · “focus on Kevin Tran” · “zoom in” · “rotate left” · “step inside” · “reset” · or ask anything
           </div>
         </div>
       </div>

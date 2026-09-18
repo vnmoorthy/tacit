@@ -81,6 +81,22 @@ Companies know this. Fortune 500s lose an estimated **$31.5B a year** from faili
 - **Runs anywhere**: any OpenAI-compatible LLM (Nebius first-class), Anthropic, local Ollama, or an offline demo brain. The same engine runs fully in the browser, so the [live demo](https://vnmoorthy.github.io/tacit/) works with no backend at all.
 - **Zero native dependencies**: Node's built-in SQLite, one Docker image, 19 tests.
 
+## Who it's for
+
+| Situation | What Tacit does |
+|---|---|
+| **The retirement wave** (Peak 65: ~4M US retirements a year) | Three interviews before the last day; the successor gets a twin instead of a binder. |
+| **Resignations, layoffs, contractor exits** | Two weeks' notice is enough. Offboarding becomes a knowledge capture, not a checklist. |
+| **Onboarding the successor** | New hires ask the twin of the person they replaced; gaps become interview questions. |
+| **Open-source maintainers stepping down** | Release rituals, flaky tests, sponsor contacts, the token only they hold. |
+| **Clinical and care teams** | Charge nurses and lab managers, interviewed in their own language, atoms in English. |
+| **Plants, utilities, field service** | Machine quirks, fast suppliers, safety rules born from incidents; phone interviews for people without desks. |
+| **Regulated and public sector** | Cited, verifiable atoms and a handover document that satisfy key-person retention audits. |
+| **Founders and family businesses** | Judgement calls, relationships and handshake deals captured before succession or acquisition. |
+| **Family memory** | Interview a grandparent: recipes, stories and sayings, answered in their own voice. |
+
+Role templates for payroll/finance, engineering/SRE, operations/manufacturing, sales, HR, clinical care, open-source maintainers, founders/executives and family memory drive the offline planner; the LLM planner adapts to any role.
+
 ## Quickstart
 
 ```bash

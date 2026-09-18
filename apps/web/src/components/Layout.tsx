@@ -13,7 +13,7 @@ function NavItem({ to, icon, label, end }: { to: string; icon: React.ReactNode; 
       className={({ isActive }) =>
         cx(
           "flex items-center gap-2.5 rounded-xl px-3 py-2 text-[14px] font-medium transition",
-          isActive ? "bg-ink text-paper shadow-soft" : "text-ink-2 hover:bg-paper-2 hover:text-ink",
+          isActive ? "bg-paper-3 text-ink border border-line-2" : "border border-transparent text-ink-2 hover:bg-paper-2 hover:text-ink",
         )
       }
     >
@@ -31,7 +31,7 @@ export function EngineBadge({ compact = false }: { compact?: boolean }) {
   const brain = demo ? "Demo brain" : `${health.engine.brain === "nebius" ? "Nebius" : health.engine.brain} · ${health.engine.model?.split("/").pop()?.replace(/-Instruct.*$/, "") ?? ""}`;
   const voice = health.higgs ? "Higgs Realtime" : "Browser voice";
   return (
-    <div className={cx("rounded-xl border border-line bg-white/50 text-[12px] leading-5", compact ? "px-2.5 py-1.5" : "px-3 py-2.5")}>
+    <div className={cx("rounded-lg border border-line bg-paper-2 text-[12px] leading-5", compact ? "px-2.5 py-1.5" : "px-3 py-2.5")}>
       <div className="flex items-center gap-2">
         <span className={cx("h-2 w-2 rounded-full", demo ? "bg-muted" : "bg-sage")} style={{ boxShadow: demo ? "none" : "0 0 0 3px rgba(79,125,92,.18)" }} />
         <span className="truncate font-medium text-ink">{brain}</span>
@@ -39,7 +39,7 @@ export function EngineBadge({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <div className="mt-0.5 flex items-center gap-2 text-muted">
           <Mic className="h-3 w-3" /> {voice}
-          <span className="ml-auto rounded-md bg-paper-2 px-1.5 text-[10.5px] uppercase tracking-wider">{health.mode === "server" ? "server" : "standalone"}</span>
+          <span className="ml-auto rounded-md bg-paper-3 px-1.5 font-mono text-[10.5px] uppercase tracking-wider">{health.mode === "server" ? "server" : "standalone"}</span>
         </div>
       )}
     </div>
@@ -78,9 +78,9 @@ export function Layout() {
   return (
     <div className="flex min-h-screen">
       {/* ── desktop sidebar ── */}
-      <aside className="sticky top-0 hidden h-screen w-[256px] shrink-0 flex-col border-r border-line bg-paper-2/60 px-4 py-5 md:flex">
-        <Link to="/" className="flex items-center gap-2.5 px-2">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink">
+      <aside className="sticky top-0 hidden h-screen w-[256px] shrink-0 flex-col border-r border-line bg-paper px-4 py-5 md:flex">
+        <Link to="/app" className="flex items-center gap-2.5 px-2">
+          <span className="grid h-9 w-9 place-items-center rounded-lg border border-line-2 bg-paper-2">
             <svg viewBox="0 0 64 64" className="h-5 w-5">
               <circle cx="32" cy="32" r="17" fill="none" stroke="#E8B36B" strokeWidth="4" />
               <circle cx="32" cy="32" r="9" fill="none" stroke="#E8B36B" strokeWidth="4" opacity=".7" />
@@ -91,7 +91,7 @@ export function Layout() {
         </Link>
 
         <nav className="mt-7 space-y-1">
-          <NavItem to="/" icon={<LayoutGrid className="h-4 w-4" />} label="Captures" end />
+          <NavItem to="/app" icon={<LayoutGrid className="h-4 w-4" />} label="Captures" end />
           <NavItem to="/new" icon={<Plus className="h-4 w-4" />} label="New capture" />
         </nav>
 
@@ -115,15 +115,16 @@ export function Layout() {
         <div className="mt-auto space-y-2">
           <EngineBadge />
           <NavItem to="/settings" icon={<SettingsIcon className="h-4 w-4" />} label="Settings" />
+          <Link to="/" className="block px-3 text-[12px] text-muted hover:text-ink">← Website</Link>
         </div>
       </aside>
 
       {/* ── main ── */}
       <main className="min-w-0 flex-1 pb-20 md:pb-0">
         {/* mobile top bar */}
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-paper/90 px-4 py-3 backdrop-blur md:hidden">
-          <Link to="/" className="flex items-center gap-2 font-display text-[20px]">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-ink">
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-paper/95 px-4 py-3 backdrop-blur md:hidden">
+          <Link to="/app" className="flex items-center gap-2 font-display text-[20px]">
+            <span className="grid h-7 w-7 place-items-center rounded-md border border-line-2 bg-paper-2">
               <svg viewBox="0 0 64 64" className="h-4 w-4">
                 <circle cx="32" cy="32" r="17" fill="none" stroke="#E8B36B" strokeWidth="4" />
                 <circle cx="32" cy="32" r="3" fill="#E8B36B" />
@@ -148,7 +149,7 @@ export function Layout() {
         {(captureId
           ? tabs.filter((t) => t.label !== "Handover")
           : [
-              { to: "/", icon: <LayoutGrid className="h-4 w-4" />, label: "Captures", end: true },
+              { to: "/app", icon: <LayoutGrid className="h-4 w-4" />, label: "Captures", end: true },
               { to: "/new", icon: <Plus className="h-4 w-4" />, label: "New" },
               { to: "/settings", icon: <SettingsIcon className="h-4 w-4" />, label: "Settings" },
             ]

@@ -98,27 +98,27 @@ export function Dashboard() {
   return (
     <div className="space-y-8">
       {/* hero */}
-      <section className="relative overflow-hidden rounded-[28px] border border-ink/10 bg-ink px-7 py-9 text-paper md:px-12 md:py-12">
-        <div className="pointer-events-none absolute -right-32 -top-32 h-[520px] w-[520px] rounded-full" style={{ background: "radial-gradient(circle, rgba(232,179,107,.28), transparent 62%)" }} />
-        <div className="pointer-events-none absolute -bottom-40 -left-24 h-[420px] w-[420px] rounded-full" style={{ background: "radial-gradient(circle, rgba(184,84,30,.22), transparent 62%)" }} />
+      <section className="relative overflow-hidden rounded-2xl border border-line-2 bg-paper-2 px-7 py-9 text-ink md:px-12 md:py-12">
+        <div className="pointer-events-none absolute -right-32 -top-32 h-[520px] w-[520px] rounded-full" style={{ background: "radial-gradient(circle, rgba(232,163,61,.12), transparent 62%)" }} />
+        <div className="pointer-events-none absolute -bottom-40 -left-24 h-[420px] w-[420px] rounded-full" style={{ background: "radial-gradient(circle, rgba(232,163,61,.06), transparent 62%)" }} />
         <div className="relative grid items-center gap-8 md:grid-cols-[1.25fr_1fr]">
           <div>
             <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-accent-2">Institutional memory</p>
             <h1 className="font-display mt-3 text-[38px] leading-[1.03] md:text-[52px]">
               Every expert who leaves takes a library with them. <span className="italic text-accent-2">Tacit interviews them first.</span>
             </h1>
-            <p className="mt-4 max-w-xl text-[16px] leading-relaxed text-paper/70">A voice AI that interviews departing experts and turns what's in their head into a living, cited knowledge base their successor can talk to.</p>
+            <p className="mt-4 max-w-xl text-[16px] leading-relaxed text-ink-2">A voice AI that interviews departing experts and turns what's in their head into a living, cited knowledge base their successor can talk to.</p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Button variant="accent" size="lg" icon={<Plus className="h-4 w-4" />} onClick={() => nav("/new")}>
                 New capture
               </Button>
               {!hasSamples && (
-                <Button size="lg" className="border-white/40 bg-white/10 text-paper hover:bg-white/20 hover:border-white/70" onClick={loadSamples} loading={loadingSamples} icon={<Database className="h-4 w-4" />}>
+                <Button size="lg" onClick={loadSamples} loading={loadingSamples} icon={<Database className="h-4 w-4" />}>
                   Load sample captures
                 </Button>
               )}
               {hasSamples && list[0] && (
-                <Button size="lg" className="border-white/40 bg-white/10 text-paper hover:bg-white/20 hover:border-white/70" onClick={() => nav(`/c/${list.find((c) => c.sample)!.id}/interview`)} icon={<Mic className="h-4 w-4" />}>
+                <Button size="lg" onClick={() => nav(`/c/${list.find((c) => c.sample)!.id}/interview`)} icon={<Mic className="h-4 w-4" />}>
                   Try a live interview
                 </Button>
               )}
@@ -189,7 +189,7 @@ export function Dashboard() {
           <Card key={s.t} className="p-5">
             <div className="flex items-center gap-3">
               <span className="font-mono text-[12px] text-muted">{s.n}</span>
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-accent-3 text-accent">{s.icon}</span>
+              <span className="grid h-8 w-8 place-items-center rounded-md bg-accent-3 text-accent">{s.icon}</span>
               <span className="font-display text-[19px]">{s.t}</span>
             </div>
             <p className="mt-3 text-[14px] leading-relaxed text-ink-2">{s.b}</p>

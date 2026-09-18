@@ -154,7 +154,7 @@ export function Ask() {
               <p className="text-[13px] text-muted mb-2">Try asking</p>
               <div className="flex flex-wrap gap-2">
                 {suggestions.map((s) => (
-                  <button key={s} onClick={() => ask(s)} className="rounded-full border border-line-2 bg-white/60 px-3 py-1.5 text-left text-[13px] hover:border-ink/40">
+                  <button key={s} onClick={() => ask(s)} className="rounded-full border border-line-2 bg-paper-2 px-3 py-1.5 text-left text-[13px] hover:border-muted">
                     {s}
                   </button>
                 ))}
@@ -164,7 +164,7 @@ export function Ask() {
           {exchanges.map((ex) => (
             <div key={ex.id} className="space-y-3 rise-in">
               <div className="flex justify-end">
-                <div className="max-w-[80%] rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-[14px] text-paper">{ex.question}</div>
+                <div className="max-w-[80%] rounded-2xl rounded-br-md border border-line-2 bg-paper-3 px-4 py-2.5 text-[14px] text-ink">{ex.question}</div>
               </div>
               <div className="flex gap-3">
                 {capture && <Avatar name={capture.expert.name} size={34} />}
@@ -241,7 +241,7 @@ export function Ask() {
           <CardHeader title="Waiting for the expert" subtitle={open.length ? `${open.length} question${open.length === 1 ? "" : "s"} go first next session` : "The queue is empty"} />
           <div className="px-5 pb-5 space-y-2">
             {open.map((q) => (
-              <div key={q.id} className="rounded-xl border border-accent-2/60 bg-accent-3/40 px-3 py-2 text-[13px]">
+              <div key={q.id} className="rounded-lg border border-accent/40 bg-accent-3/60 px-3 py-2 text-[13px]">
                 <p>{q.text}</p>
                 <p className="text-[11px] text-muted mt-0.5">
                   {q.askedBy ?? "successor"} · {fmtRelative(q.createdAt)}

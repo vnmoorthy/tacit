@@ -637,7 +637,306 @@ export const DEV: SampleSpec = {
   openQuestions: [{ text: "How do I re-run the nightly Snowflake ETL by hand if it fails?", askedBy: "Ana Lima", domain: "Data, migrations & backups" }],
 };
 
-export const SAMPLES: SampleSpec[] = [MARIA, DEV];
+/* ───────────────────────────── Luis Ortega ───────────────────────────── */
+
+export const LUIS: SampleSpec = {
+  key: "luis",
+  title: "Luis Ortega — Plant 2 Maintenance",
+  expert: { name: "Luis Ortega", role: "Lead Maintenance Technician", team: "Plant 2", tenureYears: 26 },
+  successor: { name: "Sam Whitfield", role: "Maintenance Technician" },
+  context:
+    "Fictional sample: retiring maintenance lead at Plant 2, which packs household paper products. Owns the CE-4 carton erector, PZ-2 palletizer, AC-2 air compressor and the maintenance handover in Fiix. Equipment limits and job-card references are specific to this example plant; work follows its approved procedures and authorized-person training. Fragile areas: obsolete vacuum elbows, weekend air-pressure faults and paper records of replacement-part revisions.",
+  templateKey: "operations-manufacturing",
+  departureInDays: 30,
+  sessions: [
+    {
+      mode: "text",
+      daysAgo: 5,
+      minutes: 20,
+      summary:
+        "Covered CE-4 vacuum faults, bearing trend checks, the PZ-2 stored-energy near-miss, shift handover and obsolete spare parts. Sam must complete the site's authorization before performing isolation work.",
+      qa: [
+        {
+          kind: "opening",
+          domain: "Equipment quirks & maintenance",
+          q: "Luis, which machine would surprise Sam on the first shift, and what should they watch for?",
+          a: "The CE-4 carton erector drops cartons when its vacuum elbow cracks underneath, where you can't see it from the aisle. On our approved CE-4 fault card, vacuum weaker than minus 55 kilopascals for two consecutive picks means a controlled stop and a maintenance call. Never compensate by raising the recipe vacuum setting; that hides the leak until the next carton size change.",
+          atoms: [
+            {
+              type: "gotcha",
+              title: "CE-4 vacuum elbow can crack out of sight",
+              content: "A crack underneath the CE-4 vacuum elbow causes dropped cartons and is not visible from the aisle.",
+              tags: ["CE-4", "vacuum elbow", "carton erector"],
+              quote: "The CE-4 carton erector drops cartons when its vacuum elbow cracks underneath, where you can't see it from the aisle.",
+              verified: true,
+            },
+            {
+              type: "rule",
+              title: "CE-4 weak vacuum: stop under the site fault card",
+              content: "At this plant, the approved CE-4 fault card calls for a controlled stop and maintenance call when vacuum is weaker than −55 kPa for two consecutive picks. Do not raise the recipe vacuum setting to mask the leak.",
+              tags: ["CE-4", "vacuum", "fault card", "55 kPa"],
+              quote: "On our approved CE-4 fault card, vacuum weaker than minus 55 kilopascals for two consecutive picks means a controlled stop and a maintenance call.",
+              verified: true,
+            },
+          ],
+        },
+        {
+          kind: "followup",
+          domain: "Equipment quirks & maintenance",
+          q: "What tells you a fault is developing before the machine stops?",
+          a: "Trend the CE-4 outfeed bearing with the fixed sensor, at the same speed and carton load each shift. Our trend card calls for a planned-stop inspection if it rises fifteen degrees Celsius above its recorded baseline; an alarm or unusual noise takes the immediate stop path on the fault card. The baseline and last bearing change are in Fiix asset CE4-OUT-01, not in the operator's paper log.",
+          atoms: [
+            {
+              type: "procedure",
+              title: "Compare CE-4 bearing trends at the same speed and load",
+              content: "Read the fixed bearing sensor at the same speed and carton load each shift. Follow the site's trend card: a 15 °C rise above the recorded baseline calls for a planned-stop inspection. An alarm or unusual noise follows the fault card's immediate stop path.",
+              tags: ["CE-4", "bearing", "temperature", "trend card"],
+              quote: "Our trend card calls for a planned-stop inspection if it rises fifteen degrees Celsius above its recorded baseline; an alarm or unusual noise takes the immediate stop path on the fault card.",
+            },
+            {
+              type: "tool",
+              title: "Fiix CE4-OUT-01 holds the bearing baseline",
+              content: "Use Fiix asset CE4-OUT-01 for the CE-4 outfeed bearing's temperature baseline and last replacement date. The operator's paper log does not hold those records.",
+              tags: ["Fiix", "CE4-OUT-01", "bearing"],
+              quote: "The baseline and last bearing change are in Fiix asset CE4-OUT-01, not in the operator's paper log.",
+              verified: true,
+            },
+          ],
+        },
+        {
+          kind: "new",
+          domain: "Safety & near-misses",
+          q: "Which safety rule exists because something nearly went wrong here?",
+          a: "In 2019 the PZ-2 palletizer carriage moved after an emergency stop because stored pneumatic energy was still present; nobody was hurt, but a fitter was about to enter. An emergency stop is not energy isolation, and nobody enters the guarded area until authorized staff complete the current PZ-2 lockout procedure and verify zero energy. The machine-specific checklist covers electrical and pneumatic isolation, stored energy and the approved mechanical restraint; if the checklist or restraint is missing, stop and call EHS. Sam must complete the site authorization before doing that work.",
+          atoms: [
+            {
+              type: "story",
+              title: "2019 PZ-2 near-miss: movement after an emergency stop",
+              content: "The PZ-2 carriage moved after an emergency stop because pneumatic energy remained. A fitter was about to enter; nobody was hurt. This incident explains the plant's emphasis on verified isolation.",
+              tags: ["PZ-2", "near-miss", "stored energy", "2019"],
+              quote: "In 2019 the PZ-2 palletizer carriage moved after an emergency stop because stored pneumatic energy was still present; nobody was hurt, but a fitter was about to enter.",
+            },
+            {
+              type: "rule",
+              title: "PZ-2 emergency stop does not authorize entry",
+              content: "No entry into the guarded area until authorized staff complete the current machine-specific lockout procedure and verify zero energy. An emergency stop is not isolation. Sam must complete the site's authorization before performing this work.",
+              tags: ["PZ-2", "lockout", "authorization", "safety"],
+              quote: "An emergency stop is not energy isolation, and nobody enters the guarded area until authorized staff complete the current PZ-2 lockout procedure and verify zero energy.",
+              verified: true,
+            },
+            {
+              type: "rule",
+              title: "Missing PZ-2 checklist or restraint: stop and call EHS",
+              content: "Use the current PZ-2 checklist covering electrical and pneumatic isolation, stored energy and the approved mechanical restraint. A missing checklist or restraint blocks the job; escalate to EHS.",
+              tags: ["PZ-2", "EHS", "checklist", "mechanical restraint"],
+              quote: "The machine-specific checklist covers electrical and pneumatic isolation, stored energy and the approved mechanical restraint; if the checklist or restraint is missing, stop and call EHS.",
+              verified: true,
+            },
+          ],
+        },
+        {
+          kind: "new",
+          domain: "Shift handover & daily rhythm",
+          q: "Walk me through the first and last few minutes of your shift.",
+          a: "At 5:45 I open the P2_OPEN view in Fiix with the outgoing lead and match every stopped machine to a work order. Before leaving, record the fault, last good batch, isolation status and next owner in that work order, then walk the line together. A red equipment-status tag means unavailable pending documented release; it is not a personal lock and does not replace the isolation procedure.",
+          atoms: [
+            {
+              type: "procedure",
+              title: "5:45 handover: reconcile stopped machines with Fiix",
+              content: "1. Open P2_OPEN in Fiix with the outgoing lead at 5:45.\n2. Match each stopped machine to a work order.\n3. Record the fault, last good batch, isolation status and next owner.\n4. Walk the line together before handing over.",
+              tags: ["Fiix", "P2_OPEN", "shift handover", "work order"],
+              quote: "Before leaving, record the fault, last good batch, isolation status and next owner in that work order, then walk the line together.",
+              verified: true,
+            },
+            {
+              type: "glossary",
+              title: "Red equipment-status tag: unavailable pending release",
+              content: "At Plant 2 a red equipment-status tag means the machine is unavailable pending documented release. It is not a personal lock and cannot substitute for the isolation procedure.",
+              tags: ["red tag", "release", "isolation"],
+              quote: "A red equipment-status tag means unavailable pending documented release; it is not a personal lock and does not replace the isolation procedure.",
+            },
+          ],
+        },
+        {
+          kind: "new",
+          domain: "Suppliers, parts & lead times",
+          q: "Which spare would stop production for longer than Sam expects, and who can get it?",
+          a: "Keep two CE-4 revision-C vacuum elbow kits in bin B-17 and reorder when one is issued; Westbank Industrial quotes five days, but the last three orders took three weeks. Elena Marquez at Westbank checks actual shelf stock; her extension is on the supplier record in Fiix. The revision-B elbow looks identical but its seal groove is different, so Stores must match the asset's approved parts list instead of accepting a substitute by appearance.",
+          atoms: [
+            {
+              type: "rule",
+              title: "CE-4 elbow kits: keep two, reorder on issue",
+              content: "Stock two approved revision-C vacuum elbow kits in bin B-17. Reorder when one is issued and plan for three weeks; the last three Westbank orders exceeded the quoted five days.",
+              tags: ["CE-4", "Westbank Industrial", "B-17", "spares"],
+              quote: "Keep two CE-4 revision-C vacuum elbow kits in bin B-17 and reorder when one is issued; Westbank Industrial quotes five days, but the last three orders took three weeks.",
+              verified: true,
+            },
+            {
+              type: "contact",
+              title: "Elena Marquez at Westbank checks real shelf stock",
+              content: "Ask Elena Marquez at Westbank Industrial to check actual stock for maintenance spares. Her extension is in the Fiix supplier record.",
+              tags: ["Elena Marquez", "Westbank Industrial", "Fiix"],
+              quote: "Elena Marquez at Westbank checks actual shelf stock; her extension is on the supplier record in Fiix.",
+            },
+            {
+              type: "gotcha",
+              title: "CE-4 revision-B and revision-C elbows are not interchangeable",
+              content: "The revision-B elbow has a different seal groove despite looking identical. Stores must check the asset's approved parts list before accepting a replacement.",
+              tags: ["CE-4", "revision-C", "revision-B", "Stores"],
+              quote: "The revision-B elbow looks identical but its seal groove is different, so Stores must match the asset's approved parts list instead of accepting a substitute by appearance.",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      mode: "text",
+      daysAgo: 1,
+      minutes: 20,
+      summary:
+        "Answered Sam's weekend low-air question, then covered first-off quality checks, escalation ownership, the shutdown calendar and the 2022 wrong-part incident. Two successor questions remain open about the dryer service contract and the annual shutdown approval route.",
+      qa: [
+        {
+          kind: "successor",
+          domain: "Equipment quirks & maintenance",
+          answers: "What do I do if CE-4 reports low air on a weekend but AC-2 says it is running?",
+          q: "Sam asked what to do when CE-4 reports low air on a weekend but AC-2 says it is running. Where do they start?",
+          a: "Read the remote header gauge on the utilities dashboard: our CE-4 fault card says pressure below 6.0 bar requires a controlled line stop and a call to the utilities duty technician. AC-2 saying running only means the motor is on; it does not prove air is reaching the header. Give the duty technician the header pressure and dryer alarm code from the dashboard, and leave compressor switching and dryer work to the authorized utilities team.",
+          atoms: [
+            {
+              type: "procedure",
+              title: "Weekend CE-4 low-air fault: read the header and call Utilities",
+              content: "1. Read the remote header pressure on the utilities dashboard.\n2. Follow the CE-4 fault card: below 6.0 bar requires a controlled line stop and a utilities duty call.\n3. Pass on the header pressure and dryer alarm code. Compressor switching and dryer work belong to the authorized utilities team.",
+              tags: ["CE-4", "AC-2", "Utilities", "low air", "6.0 bar"],
+              quote: "Read the remote header gauge on the utilities dashboard: our CE-4 fault card says pressure below 6.0 bar requires a controlled line stop and a call to the utilities duty technician.",
+              verified: true,
+            },
+            {
+              type: "gotcha",
+              title: "AC-2 running indicator does not prove header pressure",
+              content: "AC-2's running indicator confirms only that its motor is on. Check the remote header pressure instead of assuming compressed air is reaching CE-4.",
+              tags: ["AC-2", "header pressure", "utilities dashboard"],
+              quote: "AC-2 saying running only means the motor is on; it does not prove air is reaching the header.",
+            },
+          ],
+        },
+        {
+          kind: "new",
+          domain: "Quality & inspection judgement",
+          q: "After a carton-size change, what makes you hold the line even if the machine seems to run well?",
+          a: "The first-off sheet QF-22 requires ten cartons from CE-4 after every size change, with glue coverage checked against the approved photo standard. A lifted rear flap means stop and hold product since the last accepted check, even if the carton passes the squeeze check. Quality lead Nia Brooks decides disposition and signs the restart release; maintenance records the adjustment but cannot release held product.",
+          atoms: [
+            {
+              type: "procedure",
+              title: "QF-22 first-off check after a CE-4 size change",
+              content: "After every CE-4 carton-size change, inspect ten cartons under first-off sheet QF-22. Check glue coverage against the approved photo standard.",
+              tags: ["CE-4", "QF-22", "first-off", "glue coverage"],
+              quote: "The first-off sheet QF-22 requires ten cartons from CE-4 after every size change, with glue coverage checked against the approved photo standard.",
+              verified: true,
+            },
+            {
+              type: "decision",
+              title: "A lifted rear flap fails even when the squeeze check passes",
+              content: "A lifted rear flap triggers a stop and product hold back to the last accepted check. Passing the squeeze check does not override that defect.",
+              tags: ["CE-4", "rear flap", "product hold", "Quality"],
+              quote: "A lifted rear flap means stop and hold product since the last accepted check, even if the carton passes the squeeze check.",
+            },
+            {
+              type: "rule",
+              title: "Quality owns held-product disposition and restart release",
+              content: "Nia Brooks, the quality lead, decides held-product disposition and signs the restart release. Maintenance documents adjustments but cannot release held product.",
+              tags: ["Nia Brooks", "Quality", "restart release"],
+              quote: "Quality lead Nia Brooks decides disposition and signs the restart release; maintenance records the adjustment but cannot release held product.",
+              verified: true,
+            },
+          ],
+        },
+        {
+          kind: "new",
+          domain: "People & escalation paths",
+          q: "Who actually gets a difficult breakdown unstuck, and when do you bring them in?",
+          a: "For a recurring drive fault, call controls lead Asha Rao through the duty roster after the first failed recovery allowed by the fault card; don't keep resetting it. For an isolation question or missing safeguard, stop the job and call EHS lead Ben Okafor through the same roster. Production supervisor Jo Ellis replans the shift, but production pressure never authorizes bypassing a guard or an interlock.",
+          atoms: [
+            {
+              type: "contact",
+              title: "Asha Rao: recurring drive faults after one permitted recovery",
+              content: "Use the duty roster to reach controls lead Asha Rao after the first failed recovery permitted by the machine's fault card. Do not repeatedly reset a recurring drive fault.",
+              tags: ["Asha Rao", "Controls", "drive fault", "duty roster"],
+              quote: "For a recurring drive fault, call controls lead Asha Rao through the duty roster after the first failed recovery allowed by the fault card; don't keep resetting it.",
+            },
+            {
+              type: "rule",
+              title: "Isolation uncertainty or missing safeguards block the job",
+              content: "Stop and contact EHS lead Ben Okafor through the duty roster if isolation is uncertain or a safeguard is missing. Jo Ellis handles production replanning; production pressure cannot authorize bypassing a guard or interlock.",
+              tags: ["Ben Okafor", "EHS", "Jo Ellis", "interlock"],
+              quote: "For an isolation question or missing safeguard, stop the job and call EHS lead Ben Okafor through the same roster.",
+              verified: true,
+            },
+          ],
+        },
+        {
+          kind: "new",
+          domain: "Calendar & recurring deadlines",
+          q: "Which maintenance deadline would a new lead most easily miss?",
+          a: "The four-hour planned stop is the first Tuesday of each month, but Stores needs the reserved-parts list by noon on the preceding Thursday. Put it in the shared Plant 2 shutdown calendar and link the Fiix work orders so the night shift sees it. The AC-2 service reminder is still on my personal calendar; Sam needs to move it to the shared calendar with the approved service schedule before I retire.",
+          atoms: [
+            {
+              type: "rule",
+              title: "Monthly planned stop: reserve parts by Thursday noon",
+              content: "The four-hour stop is the first Tuesday each month. Send Stores the reserved-parts list by noon on the preceding Thursday, and link the Fiix work orders in the shared Plant 2 shutdown calendar.",
+              tags: ["Stores", "Fiix", "shutdown calendar", "Thursday noon"],
+              quote: "The four-hour planned stop is the first Tuesday of each month, but Stores needs the reserved-parts list by noon on the preceding Thursday.",
+              verified: true,
+            },
+            {
+              type: "risk",
+              title: "AC-2 service reminder remains on Luis's personal calendar",
+              content: "Before Luis retires, Sam must move the AC-2 reminder and approved service schedule to the shared calendar so servicing does not depend on Luis's account.",
+              tags: ["AC-2", "service schedule", "personal calendar", "single point of failure"],
+              quote: "The AC-2 service reminder is still on my personal calendar; Sam needs to move it to the shared calendar with the approved service schedule before I retire.",
+            },
+          ],
+        },
+        {
+          kind: "new",
+          domain: "Hard-won lessons",
+          q: "What mistake changed the way you finish a repair?",
+          a: "In 2022 we fitted the wrong CE-4 elbow revision because the box label matched an old paper parts sheet; the seal leaked and we lost the next shift chasing vacuum faults. Since then, the technician and Stores both check the revision against the current asset parts list before the job starts, and the work order gets the installed part number and revision. The marked-up revision history is still in my blue binder; scan it into Fiix with engineering's approval before I leave so it doesn't disappear with my locker.",
+          atoms: [
+            {
+              type: "story",
+              title: "2022 wrong-elbow repair cost the next shift",
+              content: "An obsolete paper parts sheet led to installation of the wrong CE-4 elbow revision. Its seal leaked, and the next shift was lost tracing vacuum faults.",
+              tags: ["CE-4", "2022", "revision history", "vacuum fault"],
+              quote: "In 2022 we fitted the wrong CE-4 elbow revision because the box label matched an old paper parts sheet; the seal leaked and we lost the next shift chasing vacuum faults.",
+            },
+            {
+              type: "procedure",
+              title: "Verify the approved revision and record the installed part",
+              content: "Before the job, the technician and Stores check the replacement revision against the current asset parts list. Record the installed part number and revision in the work order.",
+              tags: ["Stores", "parts list", "work order", "revision"],
+              quote: "Since then, the technician and Stores both check the revision against the current asset parts list before the job starts, and the work order gets the installed part number and revision.",
+              verified: true,
+            },
+            {
+              type: "risk",
+              title: "Part revision history exists only in Luis's blue binder",
+              content: "Scan the marked-up part revision history from Luis's blue binder into Fiix, with engineering's approval, before retirement. Otherwise the history may leave with his locker contents.",
+              tags: ["Fiix", "blue binder", "Engineering", "single point of failure"],
+              quote: "The marked-up revision history is still in my blue binder; scan it into Fiix with engineering's approval before I leave so it doesn't disappear with my locker.",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  openQuestions: [
+    { text: "Which dryer service contract covers weekend callouts, and who can authorize the charge?", askedBy: "Sam Whitfield", domain: "Suppliers, parts & lead times" },
+    { text: "Who approves the annual shutdown scope, and when must I submit the isolation and contractor plan?", askedBy: "Sam Whitfield", domain: "Calendar & recurring deadlines" },
+  ],
+};
+
+export const SAMPLES: SampleSpec[] = [MARIA, DEV, LUIS];
 
 export function buildAllSamples(): CaptureBundle[] {
   return SAMPLES.map(buildSample);

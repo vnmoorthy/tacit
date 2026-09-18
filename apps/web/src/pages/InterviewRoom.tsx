@@ -63,7 +63,7 @@ export function InterviewRoom() {
       .then(setCapture)
       .catch((e) => {
         toast((e as Error).message, "error");
-        nav("/");
+        nav("/app");
       });
   }, [api, id, nav, toast]);
 
@@ -291,7 +291,7 @@ export function InterviewRoom() {
                 onClick={() => setEngine(o.k)}
                 className={cx(
                   "rounded-2xl border p-4 text-left transition",
-                  engine === o.k ? "border-ink bg-white shadow-lift" : "border-line bg-white/50 hover:border-line-2",
+                  engine === o.k ? "border-accent bg-paper-2 shadow-lift" : "border-line bg-paper-2/50 hover:border-line-2",
                   !o.ok && "opacity-50 cursor-not-allowed",
                 )}
               >
@@ -344,11 +344,11 @@ export function InterviewRoom() {
           <div className="mx-auto max-w-2xl space-y-4">
             {turns.map((t) => (
               <div key={t.id} className={cx("rise-in flex", t.role === "expert" ? "justify-end" : "justify-start")}>
-                <div className={cx("max-w-[85%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed", t.role === "expert" ? "rounded-br-md bg-ink text-paper" : "rounded-bl-md bg-white/80 border border-line shadow-soft")}>
+                <div className={cx("max-w-[85%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed", t.role === "expert" ? "rounded-br-md border border-line-2 bg-paper-3 text-ink" : "rounded-bl-md border border-line bg-paper-2 shadow-soft")}>
                   {t.role === "interviewer" && (
                     <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted font-semibold">
                       Tacit
-                      {t.kind && t.kind !== "opening" && <span className="rounded bg-paper-2 px-1.5 py-0.5 normal-case tracking-normal">{t.kind === "successor" ? "from the queue" : t.kind === "followup" ? "follow-up" : t.domainId ? domainName(t.domainId) : ""}</span>}
+                      {t.kind && t.kind !== "opening" && <span className="rounded bg-paper-3 px-1.5 py-0.5 normal-case tracking-normal">{t.kind === "successor" ? "from the queue" : t.kind === "followup" ? "follow-up" : t.domainId ? domainName(t.domainId) : ""}</span>}
                       {engine === "browser" && (
                         <button onClick={() => replay(t.text)} className="ml-auto text-muted hover:text-ink" title="Replay">
                           <Volume2 className="h-3.5 w-3.5" />
@@ -356,7 +356,7 @@ export function InterviewRoom() {
                       )}
                     </div>
                   )}
-                  <p className={t.role === "interviewer" ? "font-display text-[17px]" : ""}>{t.text}</p>
+                  <p className={t.role === "interviewer" ? "font-display text-[17px] font-medium" : ""}>{t.text}</p>
                   {t.role === "expert" && t.extractedAtomIds && t.extractedAtomIds.length > 0 && (
                     <p className="mt-1.5 text-[11px] text-accent-2">↳ {t.extractedAtomIds.length} atom{t.extractedAtomIds.length === 1 ? "" : "s"} captured</p>
                   )}
@@ -365,12 +365,12 @@ export function InterviewRoom() {
             ))}
             {assistantPartial && (
               <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-2xl rounded-bl-md border border-line bg-white/60 px-4 py-3 font-display text-[17px] text-ink-2">{assistantPartial}…</div>
+                <div className="max-w-[85%] rounded-2xl rounded-bl-md border border-line bg-paper-2/70 px-4 py-3 font-display text-[17px] text-ink-2">{assistantPartial}…</div>
               </div>
             )}
             {partial && (
               <div className="flex justify-end">
-                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-ink/60 px-4 py-3 text-[15px] text-paper">{partial}…</div>
+                <div className="max-w-[85%] rounded-2xl rounded-br-md border border-line-2 bg-paper-3/60 px-4 py-3 text-[15px] text-ink-2">{partial}…</div>
               </div>
             )}
             {busy && !partial && (

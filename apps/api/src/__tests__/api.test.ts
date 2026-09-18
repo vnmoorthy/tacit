@@ -52,7 +52,7 @@ describe("API", () => {
     const res = await a.request("/api/samples/load", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
     expect(res.status).toBe(201);
     const list = await res.json();
-    expect(list.length).toBe(2);
+    expect(list.length).toBe(3);
     const md = await (await a.request(`/api/captures/${list[0].id}/handover`)).json();
     expect(md.markdown).toMatch(/# Handover/);
   });

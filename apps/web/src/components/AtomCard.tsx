@@ -47,14 +47,14 @@ export function AtomCard({
   return (
     <article
       className={cx(
-        "group relative rounded-2xl border bg-white/70 transition-all",
-        highlight ? "border-accent-2 shadow-lift ring-2 ring-accent-2/40" : "border-line shadow-soft hover:border-line-2",
+        "group relative rounded-xl border bg-paper-2/80 transition-all",
+        highlight ? "border-accent shadow-lift ring-1 ring-accent/50" : "border-line shadow-soft hover:border-line-2",
         compact ? "p-3.5" : "p-4",
       )}
     >
       <div className="flex items-start gap-3">
         {citation !== undefined && (
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-ink font-mono text-[11px] font-semibold text-accent-2">{citation}</span>
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent font-mono text-[11px] font-semibold text-[#0e1013]">{citation}</span>
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -75,12 +75,12 @@ export function AtomCard({
           )}
           {compact && <p className="mt-1 text-[12.5px] text-ink-2 line-clamp-2">{atom.content.replace(/\n+/g, " ")}</p>}
           {!compact && atom.sourceQuote && (
-            <p className="mt-2.5 border-l-2 border-accent-2 pl-3 font-display text-[13.5px] italic text-ink-2/90">“{atom.sourceQuote}”</p>
+            <p className="mt-2.5 border-l-2 border-accent pl-3 text-[13.5px] italic text-ink-2/90">“{atom.sourceQuote}”</p>
           )}
           {!compact && atom.tags.length > 0 && (
             <div className="mt-2.5 flex flex-wrap gap-1">
               {atom.tags.map((t) => (
-                <span key={t} className="rounded-md bg-paper-2 px-1.5 py-0.5 font-mono text-[10.5px] text-muted">
+                <span key={t} className="rounded-md bg-paper-3 px-1.5 py-0.5 font-mono text-[10.5px] text-muted">
                   {t}
                 </span>
               ))}
@@ -89,7 +89,7 @@ export function AtomCard({
         </div>
       </div>
       {(onVerify || onDelete || onEdit) && (
-        <div className="absolute right-3 top-3 hidden items-center gap-1 rounded-full border border-line bg-paper px-1 py-0.5 shadow-soft group-hover:flex">
+        <div className="absolute right-3 top-3 hidden items-center gap-1 rounded-full border border-line-2 bg-paper-3 px-1 py-0.5 shadow-soft group-hover:flex">
           {onVerify && (
             <button
               title={atom.verified ? "Unverify" : "Mark verified by expert"}

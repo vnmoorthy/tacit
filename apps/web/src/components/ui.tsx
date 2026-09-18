@@ -23,11 +23,11 @@ export function Button({
   const base = "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-150 select-none disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
   const sizes: Record<Size, string> = { sm: "h-8 px-3 text-[13px]", md: "h-10 px-4 text-sm", lg: "h-12 px-6 text-[15px]" };
   const variants: Record<Variant, string> = {
-    primary: "bg-ink text-paper hover:bg-ink-2 shadow-soft",
-    accent: "bg-accent text-white hover:brightness-110 shadow-soft",
-    secondary: "bg-white/70 border border-line-2 text-ink hover:bg-white hover:border-ink/30",
-    ghost: "text-ink-2 border border-transparent hover:border-line-2 hover:bg-white/70 hover:text-ink",
-    danger: "bg-danger-2 text-danger border border-danger/20 hover:bg-danger hover:text-white",
+    primary: "bg-ink text-paper hover:bg-white shadow-soft",
+    accent: "bg-accent text-[#0e1013] hover:bg-accent-2 shadow-soft",
+    secondary: "bg-paper-2 border border-line-2 text-ink hover:bg-paper-3 hover:border-muted",
+    ghost: "text-ink-2 border border-transparent hover:border-line-2 hover:bg-paper-2 hover:text-ink",
+    danger: "bg-danger-2 text-danger border border-danger/30 hover:bg-danger hover:text-white",
   };
   return (
     <button className={cx(base, sizes[size], variants[variant], className)} disabled={loading || props.disabled} {...props}>
@@ -55,7 +55,7 @@ const TONES: Record<Tone, string> = {
   plum: "bg-plum-2 text-plum border-plum/20",
   teal: "bg-teal-2 text-teal border-teal/20",
   rose: "bg-rose-2 text-rose border-rose/20",
-  ink: "bg-ink text-accent-2 border-ink",
+  ink: "bg-paper-3 text-accent-2 border-line-2",
 };
 
 export function Badge({ tone = "neutral", children, className, icon }: { tone?: Tone; children: ReactNode; className?: string; icon?: ReactNode }) {
@@ -71,7 +71,7 @@ export function Badge({ tone = "neutral", children, className, icon }: { tone?: 
 
 export function Card({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cx("rounded-2xl border border-line bg-white/60 shadow-soft backdrop-blur-[2px]", className)} {...props}>
+    <div className={cx("rounded-2xl border border-line bg-paper-2/70 shadow-soft", className)} {...props}>
       {children}
     </div>
   );
@@ -120,7 +120,7 @@ export function Stat({ label, value, hint, tone = "neutral" }: { label: string; 
 
 export function EmptyState({ icon, title, body, action }: { icon?: ReactNode; title: string; body?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-line-2 p-10 text-center">
+    <div className="rounded-2xl border border-dashed border-line-2 bg-paper-2/40 p-10 text-center">
       {icon && <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-paper-2 text-ink-2">{icon}</div>}
       <h3 className="font-display text-xl">{title}</h3>
       {body && <p className="text-sm text-muted mt-1 max-w-md mx-auto">{body}</p>}
@@ -141,7 +141,7 @@ export function Field({ label, hint, children, className }: { label: string; hin
   );
 }
 
-const inputBase = "w-full rounded-xl border border-line-2 bg-white/80 px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:outline-none focus:border-ink/40 focus:ring-2 focus:ring-accent/20 transition";
+const inputBase = "w-full rounded-lg border border-line-2 bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition";
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cx(inputBase, className)} {...props} />;
@@ -174,7 +174,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
       <div className={cx("relative w-full rounded-2xl bg-paper shadow-lift border border-line rise-in", wide ? "max-w-3xl" : "max-w-lg")}>
         <div className="flex items-center justify-between px-6 pt-5 pb-3">
           <h3 className="font-display text-xl">{title}</h3>
@@ -200,7 +200,7 @@ export function Toaster() {
           key={t.id}
           className={cx(
             "pointer-events-auto rise-in flex items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-lift max-w-sm",
-            t.kind === "error" ? "bg-danger-2 border-danger/30 text-danger" : t.kind === "success" ? "bg-sage-2 border-sage/30 text-sage" : "bg-ink text-paper border-ink",
+            t.kind === "error" ? "bg-danger-2 border-danger/30 text-danger" : t.kind === "success" ? "bg-sage-2 border-sage/30 text-sage" : "bg-paper-3 text-ink border-line-2",
           )}
         >
           <span className="flex-1">{t.text}</span>
@@ -232,7 +232,7 @@ export function Avatar({ name, size = 40 }: { name: string; size?: number }) {
     .map((w) => w[0]!.toUpperCase())
     .join("");
   return (
-    <div className="grid place-items-center rounded-full bg-ink text-accent-2 font-display shrink-0" style={{ width: size, height: size, fontSize: size * 0.38 }}>
+    <div className="grid place-items-center rounded-full border border-line-2 bg-paper-3 text-accent-2 font-display shrink-0" style={{ width: size, height: size, fontSize: size * 0.36 }}>
       {ini}
     </div>
   );

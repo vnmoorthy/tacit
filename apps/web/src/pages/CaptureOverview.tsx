@@ -72,7 +72,7 @@ export function CaptureOverview() {
   useEffect(() => {
     load().catch((e) => {
       toast((e as Error).message, "error");
-      nav("/");
+      nav("/app");
     });
   }, [load, nav, toast]);
 
@@ -98,12 +98,12 @@ export function CaptureOverview() {
   const del = async () => {
     await api.deleteCapture(id);
     toast("Capture deleted");
-    nav("/");
+    nav("/app");
   };
 
   return (
     <div className="space-y-7">
-      <header className="rounded-[24px] border border-line bg-white/55 p-5 md:p-6">
+      <header className="rounded-2xl border border-line bg-paper-2/70 p-5 md:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-4">
             <Avatar name={capture.expert.name} size={60} />
@@ -214,7 +214,7 @@ export function CaptureOverview() {
             />
             <div className="px-5 pb-5 space-y-2">
               {open.map((q) => (
-                <div key={q.id} className="flex items-start gap-2 rounded-xl border border-accent-2/50 bg-accent-3/50 px-3 py-2.5 text-[13.5px]">
+                <div key={q.id} className="flex items-start gap-2 rounded-lg border border-accent/40 bg-accent-3/60 px-3 py-2.5 text-[13.5px]">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                   <div className="min-w-0 flex-1">
                     <p>{q.text}</p>
@@ -237,7 +237,7 @@ export function CaptureOverview() {
             <div className="px-5 pb-5 space-y-2">
               {sessions.length === 0 && <p className="text-sm text-muted">Start the first interview to begin building the knowledge base.</p>}
               {sessions.map((s) => (
-                <div key={s.id} className="rounded-xl border border-line bg-white/50 px-3.5 py-3">
+                <div key={s.id} className="rounded-lg border border-line bg-paper-3/40 px-3.5 py-3">
                   <div className="flex items-center justify-between text-[12.5px]">
                     <span className="font-medium">{fmtDate(s.startedAt, { month: "short", day: "numeric" })} · {fmtRelative(s.startedAt)}</span>
                     <span className="text-muted">

@@ -65,17 +65,17 @@ export function CoverageMap({
               onClick={() => onSelect?.(isSel ? null : d.id)}
               style={{ opacity: dim ? 0.35 : 1, transition: "opacity .2s" }}
             >
-              <path d={arcPath(a0, a1, rOuter, rInner)} fill="#e6ddcd" />
-              <path d={arcPath(a0, filled, rOuter, rInner)} fill={d.priority === 1 ? "#b8541e" : d.priority === 2 ? "#e8b36b" : "#cfa97a"} style={{ transition: "d .6s" }}>
+              <path d={arcPath(a0, a1, rOuter, rInner)} fill="#232830" />
+              <path d={arcPath(a0, filled, rOuter, rInner)} fill={d.priority === 1 ? "#e8a33d" : d.priority === 2 ? "#b98232" : "#7a5a2a"} style={{ transition: "d .6s" }}>
                 <title>{`${d.name}: ${Math.round(d.coverage * 100)}%`}</title>
               </path>
-              {isSel && <path d={arcPath(a0, a1, rOuter + 4, rOuter + 1)} fill="#1c1a17" />}
+              {isSel && <path d={arcPath(a0, a1, rOuter + 4, rOuter + 1)} fill="#e8eaee" />}
               <text
                 x={cx0 + (rInner - 12) * Math.cos((a0 + a1) / 2)}
                 y={cy0 + (rInner - 12) * Math.sin((a0 + a1) / 2)}
                 fontSize="10"
                 fontFamily="JetBrains Mono, monospace"
-                fill="#8a8377"
+                fill="#7d8694"
                 textAnchor="middle"
                 dominantBaseline="middle"
               >
@@ -84,10 +84,10 @@ export function CoverageMap({
             </g>
           );
         })}
-        <text x={cx0} y={cy0 - 6} textAnchor="middle" fontFamily="Fraunces, serif" fontSize={size * 0.17} fill="#1c1a17">
+        <text x={cx0} y={cy0 - 6} textAnchor="middle" fontFamily="Inter Tight, Inter, sans-serif" fontWeight="600" fontSize={size * 0.16} fill="#e8eaee">
           {Math.round(coverage * 100)}%
         </text>
-        <text x={cx0} y={cy0 + 18} textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="11" fill="#8a8377" letterSpacing="1.5">
+        <text x={cx0} y={cy0 + 18} textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="11" fill="#7d8694" letterSpacing="1.5">
           COVERED
         </text>
       </svg>
@@ -109,11 +109,11 @@ export function CoverageMap({
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10.5px] text-muted w-4">{i + 1}</span>
                     <span className="text-[13.5px] font-medium truncate flex-1">{d.name}</span>
-                    <span className={cx("text-[10.5px] font-mono px-1.5 rounded", d.priority === 1 ? "bg-accent-3 text-accent" : "bg-paper-2 text-muted")}>P{d.priority}</span>
+                    <span className={cx("text-[10.5px] font-mono px-1.5 rounded", d.priority === 1 ? "bg-accent-3 text-accent" : "bg-paper-3 text-muted")}>P{d.priority}</span>
                     <span className="font-mono text-[12px] text-ink-2 w-10 text-right">{Math.round(d.coverage * 100)}%</span>
                   </div>
                   <div className="mt-1.5 ml-6 h-1 rounded-full bg-paper-3 overflow-hidden">
-                    <div className="h-full rounded-full bg-ink transition-all duration-700" style={{ width: `${Math.round(d.coverage * 100)}%` }} />
+                    <div className="h-full rounded-full bg-accent transition-all duration-700" style={{ width: `${Math.round(d.coverage * 100)}%` }} />
                   </div>
                   <div className="ml-6 mt-1 text-[11.5px] text-muted">
                     {d.atomCount} atoms · {d.askedCount}/{d.targetQuestions.length} questions asked

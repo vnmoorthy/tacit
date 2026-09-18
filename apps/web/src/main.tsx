@@ -11,6 +11,7 @@ import { Graph } from "./pages/Graph.js";
 import { Handover } from "./pages/Handover.js";
 import { InterviewRoom } from "./pages/InterviewRoom.js";
 import { Knowledge } from "./pages/Knowledge.js";
+import { Landing } from "./pages/Landing.js";
 import { NewCapture } from "./pages/NewCapture.js";
 import { Settings } from "./pages/Settings.js";
 
@@ -21,7 +22,7 @@ const router = createBrowserRouter([
       {
         element: <Layout />,
         children: [
-          { path: "/", element: <Dashboard /> },
+          { path: "/app", element: <Dashboard /> },
           { path: "/new", element: <NewCapture /> },
           { path: "/c/:id", element: <CaptureOverview /> },
           { path: "/c/:id/knowledge", element: <Knowledge /> },
@@ -30,6 +31,7 @@ const router = createBrowserRouter([
           { path: "/settings", element: <Settings /> },
         ],
       },
+      { path: "/", element: <Landing /> },
       { path: "/c/:id/interview", element: <InterviewRoom /> },
       { path: "/c/:id/graph", element: <Graph /> },
     ],

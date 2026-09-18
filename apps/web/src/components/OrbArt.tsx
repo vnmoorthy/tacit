@@ -14,7 +14,7 @@ export function OrbArt({ size = 300, chips = true }: { size?: number; chips?: bo
             <feGaussianBlur stdDeviation="16" />
           </filter>
         </defs>
-        <circle cx="200" cy="200" r="150" fill="#e8b36b" opacity=".22" filter="url(#orbBlur)" />
+        <circle cx="200" cy="200" r="150" fill="#e8a33d" opacity=".14" filter="url(#orbBlur)" />
         <g fill="none" stroke="#e8b36b" strokeLinecap="round">
           <circle cx="200" cy="200" r="178" strokeWidth="2" opacity=".3" strokeDasharray="12 10" style={{ transformOrigin: "200px 200px", animation: "orb-spin 60s linear infinite" }} />
           <path d="M200 40 A160 160 0 0 1 360 200" strokeWidth="10" opacity=".95" />
@@ -37,12 +37,12 @@ export function OrbArt({ size = 300, chips = true }: { size?: number; chips?: bo
 
 function Chip({ className, tone, label, text, delay }: { className: string; tone: "gotcha" | "rule" | "contact"; label: string; text: string; delay: number }) {
   const tones = {
-    gotcha: "bg-accent-3 text-[#8a4a12]",
-    rule: "bg-ink text-accent-2",
+    gotcha: "bg-accent-3 text-accent",
+    rule: "bg-paper-3 text-accent-2",
     contact: "bg-sage-2 text-sage",
   }[tone];
   return (
-    <div className={`absolute flex items-center gap-2 rounded-xl border border-white/60 bg-white/85 px-3 py-2 text-[12.5px] shadow-lift backdrop-blur ${className}`} style={{ animation: `orb-breathe 5s ease-in-out ${delay}s infinite` }}>
+    <div className={`absolute flex items-center gap-2 rounded-lg border border-line-2 bg-paper-2/95 px-3 py-2 text-[12.5px] shadow-lift ${className}`} style={{ animation: `orb-breathe 5s ease-in-out ${delay}s infinite` }}>
       <span className={`rounded-full px-1.5 py-0.5 font-mono text-[9.5px] font-semibold ${tones}`}>{label}</span>
       <span className="text-ink">{text}</span>
     </div>

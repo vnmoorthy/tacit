@@ -115,14 +115,14 @@ export function Knowledge() {
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        <button onClick={() => setType("")} className={cx("rounded-full border px-3 py-1 text-[12.5px]", !type ? "bg-ink text-paper border-ink" : "border-line-2 bg-white/60 hover:border-ink/40")}>
+        <button onClick={() => setType("")} className={cx("rounded-full border px-3 py-1 text-[12.5px]", !type ? "bg-ink text-paper border-ink" : "border-line-2 bg-paper-2 hover:border-muted")}>
           All
         </button>
         {ATOM_TYPES.map((t) => (
           <button
             key={t}
             onClick={() => setType(type === t ? "" : t)}
-            className={cx("inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px]", type === t ? "bg-ink text-paper border-ink" : "border-line-2 bg-white/60 hover:border-ink/40")}
+            className={cx("inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px]", type === t ? "bg-ink text-paper border-ink" : "border-line-2 bg-paper-2 hover:border-muted")}
           >
             {ATOM_META[t].icon}
             {ATOM_META[t].label}

@@ -33,6 +33,45 @@ const EXAMPLES = [
     },
   },
   {
+    label: "Open-source maintainer",
+    v: {
+      name: "Priya Raman",
+      role: "Lead maintainer, an open-source data framework",
+      team: "Core maintainers",
+      tenure: "6",
+      successor: "Tomás Vidal",
+      successorRole: "Incoming maintainer",
+      context:
+        "Runs releases for a Python data framework with 40k GitHub stars: tagging, changelog, PyPI publishing, the docs deploy, and the announcement. Holds the PyPI token and the sponsor relationships. Knows which tests are flaky, which modules are fragile, and how issue triage really works.",
+    },
+  },
+  {
+    label: "Charge nurse",
+    v: {
+      name: "Grace Okoro",
+      role: "Charge Nurse, Medical ICU",
+      team: "Nursing",
+      tenure: "24",
+      successor: "Daniel Reyes",
+      successorRole: "Incoming charge nurse",
+      context:
+        "Runs the night shift on a 20-bed medical ICU: staffing, escalation to residents and attendings, the EHR order sets that actually get used, equipment quirks on the infusion pumps and ventilators, and the handoff ritual that keeps patients safe. Knows which pharmacist answers at 3am.",
+    },
+  },
+  {
+    label: "Grandmother's stories",
+    v: {
+      name: "Lakshmi Iyer",
+      role: "Grandmother, keeper of the family recipes and stories",
+      team: "The Iyer family",
+      tenure: "78",
+      successor: "The grandchildren",
+      successorRole: "",
+      context:
+        "Cooks the festival meals from memory, knows the family's story from the village to the city, the sayings everyone quotes, and how each holiday is really done. Prefers to talk in Tamil.",
+    },
+  },
+  {
     label: "Plant maintenance",
     v: {
       name: "Luis Ortega",
@@ -99,7 +138,7 @@ export function NewCapture() {
           <button
             key={ex.label}
             type="button"
-            className="rounded-full border border-line-2 bg-white/60 px-3 py-1 hover:border-ink/40"
+            className="rounded-full border border-line-2 bg-paper-2 px-3 py-1 hover:border-muted"
             onClick={() => setF({ ...f, ...ex.v, departure: f.departure || defaultDeparture() })}
           >
             {ex.label}

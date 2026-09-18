@@ -57,7 +57,7 @@ export function Handover() {
           </>
         }
       />
-      <Card className="px-8 py-8 md:px-12 md:py-10 bg-white/80">
+      <Card className="px-8 py-8 md:px-12 md:py-10 bg-paper-2">
         {md === null ? <div className="h-96 animate-pulse rounded-xl bg-paper-2" /> : <Markdown>{md}</Markdown>}
       </Card>
     </div>
