@@ -138,7 +138,7 @@ export function NewCapture() {
           <button
             key={ex.label}
             type="button"
-            className="rounded-full border border-line-2 bg-paper-2 px-3 py-1 hover:border-muted"
+            className="rounded-none border border-line-2 bg-paper-2 px-3 py-1 hover:border-muted"
             onClick={() => setF({ ...f, ...ex.v, departure: f.departure || defaultDeparture() })}
           >
             {ex.label}

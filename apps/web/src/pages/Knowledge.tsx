@@ -140,7 +140,7 @@ export function Knowledge() {
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        <button aria-pressed={!type} onClick={() => setType("")} className={cx("rounded-full border px-3 py-1 text-[12.5px]", !type ? "bg-ink text-paper border-ink" : "border-line-2 bg-paper-2 hover:border-muted")}>
+        <button aria-pressed={!type} onClick={() => setType("")} className={cx("rounded-none border px-3 py-1 text-[12.5px]", !type ? "bg-ink text-paper border-ink" : "border-line-2 bg-paper-2 hover:border-muted")}>
           All
         </button>
         {ATOM_TYPES.map((t) => (
@@ -148,7 +148,7 @@ export function Knowledge() {
             key={t}
             aria-pressed={type === t}
             onClick={() => setType(type === t ? "" : t)}
-            className={cx("inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px]", type === t ? "bg-ink text-paper border-ink" : "border-line-2 bg-paper-2 hover:border-muted")}
+            className={cx("inline-flex items-center gap-1.5 rounded-none border px-3 py-1 text-[12.5px]", type === t ? "bg-ink text-paper border-ink" : "border-line-2 bg-paper-2 hover:border-muted")}
           >
             {ATOM_META[t].icon}
             {ATOM_META[t].label}

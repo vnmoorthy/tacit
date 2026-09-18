@@ -840,6 +840,19 @@ export function Graph() {
     } catch (error) { recordingCleanup.current?.(); toast(`Could not record: ${(error as Error).message}`, "error"); }
   };
 
+  // PRODUCT REQUIREMENT (do not remove): the constellation opens with the live camera behind it,
+  // so the presenter can move the graph by hand immediately. Failure to get a camera is silent.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!ready || autoStarted.current || !HandTracker.supported()) return;
+    autoStarted.current = true;
+    const t = setTimeout(() => {
+      if (!tracker.current) void toggleCamera({ silent: true });
+    }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
   const reset = () => {
     select(null);
     setAnswer(null);

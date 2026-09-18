@@ -22,7 +22,7 @@ export function buttonClass({ variant = "secondary", size = "md", className }: {
     ghost: "text-ink-2 border border-transparent hover:border-line-2 hover:bg-paper-2 hover:text-ink",
     danger: "bg-danger-2 text-danger border border-danger/30 hover:bg-danger hover:text-white",
   };
-  return cx("inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-150 select-none disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50", sizes[size], variants[variant], className);
+  return cx("inline-flex items-center justify-center gap-2 rounded-none font-medium tracking-[0.01em] transition-all duration-150 select-none disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50", sizes[size], variants[variant], className);
 }
 
 export function Button({
@@ -65,7 +65,7 @@ const TONES: Record<Tone, string> = {
 
 export function Badge({ tone = "neutral", children, className, icon }: { tone?: Tone; children: ReactNode; className?: string; icon?: ReactNode }) {
   return (
-    <span className={cx("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11.5px] font-medium leading-4 whitespace-nowrap", TONES[tone], className)}>
+    <span className={cx("inline-flex items-center gap-1 rounded-none border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.08em] leading-4 whitespace-nowrap", TONES[tone], className)}>
       {icon}
       {children}
     </span>
@@ -99,7 +99,7 @@ export function PageHeader({ eyebrow, title, lede, actions, className }: { eyebr
   return (
     <header className={cx("flex flex-col gap-4 md:flex-row md:items-end md:justify-between", className)}>
       <div className="min-w-0">
-        {eyebrow && <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">{eyebrow}</p>}
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1 className="font-display mt-1.5 text-[32px] leading-[1.08] md:text-[38px]">{title}</h1>
         {lede && <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-ink-2">{lede}</p>}
       </div>
@@ -114,7 +114,7 @@ export function Stat({ label, value, hint, tone = "neutral" }: { label: string; 
   const color = tone === "accent" ? "text-accent" : tone === "danger" ? "text-danger" : tone === "sage" ? "text-sage" : "text-ink";
   return (
     <Card className="px-5 py-4">
-      <div className="text-[12px] uppercase tracking-wider text-muted font-medium">{label}</div>
+      <div className="eyebrow">{label}</div>
       <div className={cx("font-display mt-2 text-[30px] leading-none md:text-[34px]", color)}>{value}</div>
       {hint && <div className="mt-2 text-[12.5px] leading-snug text-muted">{hint}</div>}
     </Card>
@@ -285,7 +285,7 @@ export function Avatar({ name, size = 40 }: { name: string; size?: number }) {
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex items-center justify-between mb-3">
-      <h2 className="text-[12px] uppercase tracking-[0.14em] text-muted font-semibold">{children}</h2>
+      <h2 className="eyebrow">{children}</h2>
       {action}
     </div>
   );

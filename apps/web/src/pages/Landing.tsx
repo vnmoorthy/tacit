@@ -9,7 +9,7 @@ const REPO = "https://github.com/vnmoorthy/tacit";
 const VIDEO = "https://github.com/vnmoorthy/tacit/releases/download/v0.1.0-hackathon/tacit-demo.mp4";
 
 function Eyebrow({ children, light }: { children: React.ReactNode; light?: boolean }) {
-  return <p className={cx("font-mono text-[12px] font-medium uppercase tracking-[0.16em]", light ? "text-accent-2" : "text-accent")}>{children}</p>;
+  return <p className={cx("eyebrow", light ? "text-accent-2" : "text-accent")}>{children}</p>;
 }
 
 function H2({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -40,7 +40,7 @@ export function Landing() {
             </span>
             <span className="font-display text-[22px]">Tacit</span>
           </a>
-          <nav className="ml-4 hidden items-center gap-6 text-[14px] text-ink-2 md:flex">
+          <nav className="ml-6 hidden items-center gap-6 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2 md:flex">
             <a href="#how" className="hover:text-ink">How it works</a>
             <a href="#product" className="hover:text-ink">Product</a>
             <a href="#uses" className="hover:text-ink">Use cases</a>
@@ -60,12 +60,12 @@ export function Landing() {
 
       {/* ── hero ── */}
       <section id="top" className="relative overflow-hidden">
-        <div className="pointer-events-none absolute -right-40 -top-40 h-[640px] w-[640px] rounded-full" style={{ background: "radial-gradient(circle, rgba(232,163,61,.10), transparent 62%)" }} />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.35]" style={{ backgroundImage: "linear-gradient(to right, #1a1a1a 1px, transparent 1px), linear-gradient(to bottom, #1a1a1a 1px, transparent 1px)", backgroundSize: "96px 96px", maskImage: "radial-gradient(ellipse at 30% 20%, black 20%, transparent 70%)" }} />
         <div className="mx-auto grid max-w-[1180px] items-center gap-10 px-5 pb-16 pt-12 md:grid-cols-[1.2fr_1fr] md:px-8 md:pb-24 md:pt-20">
           <div className="rise-in">
             <Eyebrow>Institutional memory, captured by conversation</Eyebrow>
-            <h1 className="font-display mt-4 text-[44px] leading-[1.02] md:text-[66px]">
-              Every expert who leaves takes a library with them. <span className="italic text-accent">Tacit interviews them first.</span>
+            <h1 className="font-display mt-5 text-[46px] leading-[0.98] md:text-[76px]">
+              Every expert who leaves takes a library with them. <span className="text-accent">Tacit interviews them first.</span>
             </h1>
             <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-ink-2 md:text-[19px]">
               A voice AI that interviews your departing experts and turns what's in their head into a living, cited knowledge base their successor can talk to. Grounded in the expert's own words.
@@ -96,6 +96,31 @@ export function Landing() {
         </div>
       </section>
 
+      {/* ── full-bleed visual ── */}
+      <section className="border-b border-line">
+        <div className="mx-auto max-w-[1180px] px-5 py-10 md:px-8 md:py-14">
+          <div className="grid gap-px bg-line md:grid-cols-[1.6fr_1fr]">
+            <div className="relative bg-paper">
+              <img src="/img/constellation.gif" alt="The constellation lighting up the atoms behind an answer" className="block w-full" loading="lazy" />
+            </div>
+            <div className="flex flex-col justify-between bg-paper p-6 md:p-8">
+              <div>
+                <p className="eyebrow">Live knowledge graph</p>
+                <h3 className="font-display mt-3 text-[26px] leading-tight">Every atom, every person, every system the expert mentioned. Steered by hand and voice.</h3>
+              </div>
+              <dl className="mt-8 grid grid-cols-3 gap-px bg-line">
+                {[["9", "atom types"], ["18", "interview languages"], ["0", "keys required"]].map(([n, l]) => (
+                  <div key={l} className="bg-paper py-3 pr-3">
+                    <dt className="font-display text-[28px] leading-none text-ink">{n}</dt>
+                    <dd className="eyebrow mt-2">{l}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── problem ── */}
       <section className="mx-auto max-w-[1180px] px-5 py-16 md:px-8 md:py-24">
         <div className="grid gap-10 md:grid-cols-[1fr_1.1fr] md:items-end">
@@ -106,6 +131,19 @@ export function Landing() {
           <p className="text-[17px] leading-relaxed text-ink-2">
             The real cut-off time. The vendor rep who actually answers. The macro on their desktop. The rule that exists because of an incident nobody remembers. Companies ask experts to "write the documentation". Experts don't. <span className="text-ink">But they will talk for an hour.</span>
           </p>
+        </div>
+        <div className="mt-10 grid gap-px border border-line bg-line md:grid-cols-3">
+          {[
+            ["10,000", "Americans turn 65 every day", "Pew Research"],
+            ["$31.5B", "lost yearly by Fortune 500s to poor knowledge sharing", "IDC"],
+            ["42%", "of the skills a job needs are known only by the person doing it", "Panopto, 2018"],
+          ].map(([n, t, src]) => (
+            <div key={n} className="bg-paper p-7">
+              <div className="font-display text-[54px] leading-none text-ink">{n}</div>
+              <p className="mt-4 text-[15px] leading-snug text-ink-2">{t}</p>
+              <p className="eyebrow mt-4">Source: {src}</p>
+            </div>
+          ))}
         </div>
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {[
@@ -128,16 +166,16 @@ export function Landing() {
           <Eyebrow light>How it works</Eyebrow>
           <H2 className="max-w-3xl">Make the talking the documentation.</H2>
           <p className="mt-4 max-w-2xl text-[16px] text-ink-2">A closed loop: every conversation becomes cited knowledge, and every gap becomes the next question.</p>
-          <div className="mt-12 grid gap-4 md:grid-cols-4">
+          <div className="mt-12 grid gap-px border border-line bg-line md:grid-cols-4">
             {[
               { n: "01", icon: <Mic className="h-5 w-5" />, t: "Interview", b: "A voice agent asks one question at a time and follows the thread: the hedges, the names, the exceptions. Real-time speech-to-speech with interruptions on Boson Higgs Realtime." },
               { n: "02", icon: <Sparkles className="h-5 w-5" />, t: "Distil", b: "While the expert is still talking, every answer becomes typed knowledge atoms with the expert's own words attached: procedures, rules, gotchas, contacts, tools, decisions, risks." },
               { n: "03", icon: <Quote className="h-5 w-5" />, t: "Ask", b: "The successor talks to the expert's twin. Answers cite the atoms they came from and can be spoken in the expert's cloned voice." },
               { n: "04", icon: <ArrowRight className="h-5 w-5" />, t: "Close the gap", b: "Questions the twin can't answer enter the next interview queue. The coverage map highlights topics that need more interviewing." },
             ].map((s) => (
-              <div key={s.n} className="rounded-xl border border-line-2 bg-paper-3/50 p-6">
+              <div key={s.n} className="bg-paper-2 p-6">
                 <div className="flex items-center justify-between">
-                  <span className="grid h-10 w-10 place-items-center rounded-md bg-accent text-[#0e1013]">{s.icon}</span>
+                  <span className="grid h-10 w-10 place-items-center bg-ink text-paper">{s.icon}</span>
                   <span className="font-mono text-[12px] text-muted">{s.n}</span>
                 </div>
                 <h3 className="font-display mt-5 text-[22px]">{s.t}</h3>
@@ -195,7 +233,7 @@ export function Landing() {
           ))}
         </div>
 
-        <div className="mt-20 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-20 grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
           {[
             [<Mic className="h-4 w-4" />, "Real-time voice interviews", "Speech-to-speech on Higgs Realtime, with natural turn-taking and interruptions."],
             [<Brain className="h-4 w-4" />, "Live extraction", "Nine atom types with confidence and source quotes, while the expert talks."],
@@ -207,7 +245,7 @@ export function Landing() {
             [<Phone className="h-4 w-4" />, "Phone interviews", "Tacit can call the expert: Twilio SIP → LiveKit → Higgs agent."],
             [<Wand2 className="h-4 w-4" />, "Works with zero keys", "Offline demo brain + browser voice. Add keys when you have them."],
           ].map(([icon, t, b], i) => (
-            <div key={i} className="rounded-xl border border-line bg-paper-2/70 p-5">
+            <div key={i} className="bg-paper p-6">
               <div className="flex items-center gap-2 text-accent">
                 {icon}
                 <span className="font-display text-[18px] text-ink">{t}</span>
@@ -223,7 +261,7 @@ export function Landing() {
         <div className="mx-auto max-w-[1180px] px-5 py-16 md:px-8 md:py-24">
           <Eyebrow>Use cases</Eyebrow>
           <H2 className="max-w-3xl">Wherever knowledge lives in one person's head.</H2>
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-12 grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
             {[
               [<Users className="h-5 w-5" />, "Retirement handovers", "Capture the 20-year veteran's experience before their last day, and give their successor a searchable record of how the work gets done."],
               [<Building2 className="h-5 w-5" />, "Resignations, layoffs, contractor exits", "Two weeks' notice is enough for three interviews. HR offboarding becomes a knowledge capture, not a checklist."],
@@ -235,8 +273,8 @@ export function Landing() {
               [<HeartHandshake className="h-5 w-5" />, "Founders and family businesses", "Second-generation handovers and acquisitions: capture the founder's judgement calls, relationships and stories before the deal closes."],
               [<Quote className="h-5 w-5" />, "Family memory", "Interview a grandparent. Recipes, stories and rules of thumb become a searchable archive that answers in their own voice."],
             ].map(([icon, t, b], i) => (
-              <div key={i} className="rounded-xl border border-line bg-paper p-6 transition hover:border-line-2 hover:shadow-lift">
-                <span className="grid h-10 w-10 place-items-center rounded-md bg-accent-3 text-accent">{icon}</span>
+              <div key={i} className="bg-paper-2 p-6 transition hover:bg-paper-3">
+                <span className="grid h-10 w-10 place-items-center border border-line-2 text-accent">{icon}</span>
                 <h3 className="font-display mt-4 text-[21px] leading-tight">{t}</h3>
                 <p className="mt-2 text-[14.5px] leading-relaxed text-ink-2">{b}</p>
               </div>
@@ -290,7 +328,7 @@ NEBIUS_API_KEY=...  # Qwen3 on Nebius Token Factory`}
         </div>
       </section>
 
-      <footer className="mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-3 px-5 py-8 text-[13px] text-muted md:flex-row md:px-8">
+      <footer className="mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-3 border-t border-line px-5 py-8 font-mono text-[11px] uppercase tracking-[0.12em] text-muted md:flex-row md:px-8">
         <span>Tacit — institutional memory, captured by conversation.</span>
         <span>
           Built at OSS4AI's "Build an AI Startup in One Day" and the Boson Higgs Audio Hackathon 2026 ·{" "}

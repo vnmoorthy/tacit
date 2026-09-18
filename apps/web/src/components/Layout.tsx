@@ -12,7 +12,7 @@ function NavItem({ to, icon, label, end }: { to: string; icon: React.ReactNode; 
       end={end}
       className={({ isActive }) =>
         cx(
-          "flex items-center gap-2.5 rounded-xl px-3 py-2 text-[14px] font-medium transition",
+          "flex items-center gap-2.5 rounded-none px-3 py-2 text-[13.5px] font-medium transition",
           isActive ? "bg-paper-3 text-ink border border-line-2" : "border border-transparent text-ink-2 hover:bg-paper-2 hover:text-ink",
         )
       }

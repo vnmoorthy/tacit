@@ -17,7 +17,8 @@
     "seed": "pnpm --filter @tacit/api run seed",
     "test:demo": "node scripts/demo-smoke.mjs",
     "test:demo:live": "node scripts/demo-live-smoke.mjs",
-    "test:demo:accessibility": "node scripts/demo-accessibility-smoke.mjs"
+    "test:demo:accessibility": "node scripts/demo-accessibility-smoke.mjs",
+    "test:demo:gestures": "node scripts/demo-gestures-smoke.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -201,7 +201,7 @@ export function Ask() {
               <p className="text-[13px] text-muted mb-2">Try asking</p>
               <div className="flex flex-wrap gap-2">
                 {suggestions.map((s) => (
-                  <button key={s} onClick={() => ask(s)} disabled={busy || !capture} className="rounded-full border border-line-2 bg-paper-2 px-3 py-1.5 text-left text-[13px] hover:border-muted">
+                  <button key={s} onClick={() => ask(s)} disabled={busy || !capture} className="rounded-none border border-line-2 bg-paper-2 px-3 py-1.5 text-left text-[13px] hover:border-muted">
                     {s}
                   </button>
                 ))}

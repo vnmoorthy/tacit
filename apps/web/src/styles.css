@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
 @theme {
-  --color-paper: #0e1013;
-  --color-paper-2: #14171c;
-  --color-paper-3: #1b1f26;
-  --color-ink: #e8eaee;
-  --color-ink-2: #b6bcc6;
-  --color-muted: #7d8694;
-  --color-line: #232830;
-  --color-line-2: #303742;
+  --color-paper: #050505;
+  --color-paper-2: #0f0f0f;
+  --color-paper-3: #181818;
+  --color-ink: #ffffff;
+  --color-ink-2: #c9c9c9;
+  --color-muted: #8a8a8a;
+  --color-line: #262626;
+  --color-line-2: #3a3a3a;
   --color-accent: #e8a33d;
   --color-accent-2: #f0b95c;
   --color-accent-3: #2a2013;
@@ -29,12 +29,12 @@
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -12px rgba(0, 0, 0, 0.6);
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 10px;
-  --radius-2xl: 12px;
-  --radius-3xl: 14px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
 }
 
 html,
@@ -60,8 +60,16 @@ body {
 
 .font-display {
   font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: -0.022em;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-muted);
 }
 
 .font-mono {
