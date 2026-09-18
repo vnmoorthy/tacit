@@ -125,6 +125,24 @@ export function Settings() {
               <Input type="password" value={s.apiKey} onChange={(e) => setS({ ...s, apiKey: e.target.value })} placeholder="sk-…" autoComplete="off" />
             </Field>
           )}
+          <div className="border-t border-line pt-4">
+            <p className="text-[13px] font-medium text-ink">Boson AI · Higgs voice</p>
+            <p className="mt-1 text-[12.5px] text-muted">Enables Higgs Realtime interviews, Higgs Audio speech and voice cloning directly from this browser. The key is stored only in this browser and sent only to api.boson.ai.</p>
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
+              <Field label="Boson API key">
+                <Input type="password" value={s.bosonKey} onChange={(e) => setS({ ...s, bosonKey: e.target.value })} placeholder="bai-…" autoComplete="off" />
+              </Field>
+              <Field label="Interviewer voice">
+                <Select value={s.bosonVoice} onChange={(e) => setS({ ...s, bosonVoice: e.target.value })}>
+                  {["nora", "chloe", "eleanor", "oliver", "marcus", "jake"].map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Button variant="primary" onClick={save} loading={busy} icon={<RefreshCw className="h-4 w-4" />}>
               Save & restart engine
