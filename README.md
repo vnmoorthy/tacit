@@ -123,6 +123,8 @@ Two interchangeable brains implement the same interface:
 
 ### The voice stack (`apps/web/src/lib/voice`)
 
+<p align="center"><img src="docs/assets/interview-higgs.png" alt="A live Higgs Realtime session: the expert talks, Tacit listens, atoms land in real time" width="100%" /><br/><sub>A live Higgs Realtime session captured in an automated browser run with a synthetic microphone: expert audio → transcript → atoms → refreshed agenda → next spoken question.</sub></p>
+
 | Engine | Path | When |
 |---|---|---|
 | **Higgs Realtime** | Browser ⇄ `wss://api.boson.ai/v1/realtime` (ephemeral `bai-client-secret`, PCM16 @ 24 kHz, OpenAI Realtime events). User transcripts via `higgs-stt-3.1` → `/sessions/:id/turns` for extraction; the agenda is refreshed with `session.update` after every answer. | `BOSON_API_KEY` set |
