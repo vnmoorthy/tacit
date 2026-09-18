@@ -1,0 +1,4 @@
+livekit-agents[openai]~=1.2
+livekit-api~=1.0
+httpx>=0.27
+python-dotenv>=1.0

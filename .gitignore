@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+.env
+.env.local
+*.local
+data/*.db
+data/*.db-*
+.DS_Store
+*.log
+coverage
+.vite
+frontend.zip

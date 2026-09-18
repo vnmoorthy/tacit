@@ -1,0 +1,24 @@
+{
+  "name": "tacit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tacit — voice AI that interviews your departing experts and turns tacit knowledge into a living, queryable knowledge base.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "dev": "pnpm -r --parallel --stream run dev",
+    "build": "pnpm -r run build",
+    "start": "pnpm --filter @tacit/api run start",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "seed": "pnpm --filter @tacit/api run seed"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

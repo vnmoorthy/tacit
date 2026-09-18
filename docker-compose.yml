@@ -1,0 +1,13 @@
+services:
+  tacit:
+    build: .
+    ports:
+      - "8787:8787"
+    env_file:
+      - .env
+    volumes:
+      - tacit-data:/data
+    restart: unless-stopped
+
+volumes:
+  tacit-data:

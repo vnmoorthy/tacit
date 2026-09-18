@@ -1,0 +1,216 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f6f1e9;
+  --color-paper-2: #efe8dc;
+  --color-paper-3: #e6ddcd;
+  --color-ink: #1c1a17;
+  --color-ink-2: #4a453d;
+  --color-muted: #8a8377;
+  --color-line: #e1d9cc;
+  --color-line-2: #cfc5b4;
+  --color-accent: #b8541e;
+  --color-accent-2: #e8b36b;
+  --color-accent-3: #f6e3c3;
+  --color-sage: #4f7d5c;
+  --color-sage-2: #dfeadf;
+  --color-danger: #b03a2e;
+  --color-danger-2: #f3dcd8;
+  --color-info: #345d8a;
+  --color-info-2: #dde7f2;
+  --color-plum: #6b4c8a;
+  --color-plum-2: #e9e0f2;
+  --color-teal: #2f7a7a;
+  --color-teal-2: #d9ecec;
+  --color-rose: #a34a6a;
+  --color-rose-2: #f2dde5;
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --shadow-soft: 0 1px 2px rgba(28, 26, 23, 0.04), 0 8px 24px -12px rgba(28, 26, 23, 0.18);
+  --shadow-lift: 0 2px 6px rgba(28, 26, 23, 0.06), 0 18px 40px -16px rgba(28, 26, 23, 0.28);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-accent-2);
+  color: var(--color-ink);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 72;
+  letter-spacing: -0.01em;
+}
+
+.hairline {
+  border-color: var(--color-line);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--color-line-2);
+  border-radius: 8px;
+}
+
+/* Markdown rendering */
+.prose-tacit {
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+.prose-tacit > * + * {
+  margin-top: 0.75em;
+}
+.prose-tacit h1,
+.prose-tacit h2,
+.prose-tacit h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin-top: 1.6em;
+}
+.prose-tacit h1 {
+  font-size: 2rem;
+}
+.prose-tacit h2 {
+  font-size: 1.45rem;
+  border-bottom: 1px solid var(--color-line);
+  padding-bottom: 0.3em;
+}
+.prose-tacit h3 {
+  font-size: 1.1rem;
+  color: var(--color-ink-2);
+}
+.prose-tacit p {
+  margin: 0.5em 0;
+}
+.prose-tacit ul,
+.prose-tacit ol {
+  padding-left: 1.4em;
+  margin: 0.4em 0;
+}
+.prose-tacit ul {
+  list-style: disc;
+}
+.prose-tacit ol {
+  list-style: decimal;
+}
+.prose-tacit li {
+  margin: 0.2em 0;
+}
+.prose-tacit blockquote {
+  border-left: 3px solid var(--color-accent-2);
+  padding: 0.2em 0.9em;
+  color: var(--color-ink-2);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.02em;
+  background: var(--color-accent-3);
+  border-radius: 0 10px 10px 0;
+}
+.prose-tacit code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--color-paper-2);
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
+}
+.prose-tacit table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9em;
+}
+.prose-tacit th,
+.prose-tacit td {
+  border: 1px solid var(--color-line);
+  padding: 0.4em 0.6em;
+  text-align: left;
+}
+.prose-tacit th {
+  background: var(--color-paper-2);
+  font-weight: 600;
+}
+.prose-tacit strong {
+  font-weight: 600;
+}
+.prose-tacit a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+.prose-tacit hr {
+  border: 0;
+  border-top: 1px solid var(--color-line);
+}
+
+/* Citation chips inside markdown answers */
+.prose-tacit .cite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35em;
+  height: 1.35em;
+  padding: 0 0.35em;
+  margin: 0 0.1em;
+  border-radius: 999px;
+  background: var(--color-ink);
+  color: var(--color-accent-2);
+  font-family: var(--font-mono);
+  font-size: 0.7em;
+  font-weight: 600;
+  vertical-align: 0.15em;
+  cursor: pointer;
+}
+
+@keyframes orb-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+@keyframes orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise-in {
+  animation: rise-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}
