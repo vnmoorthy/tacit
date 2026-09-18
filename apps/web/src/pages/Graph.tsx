@@ -77,6 +77,7 @@ export function Graph() {
   const immersiveRef = useRef<{ tex: any; plane: any; three: any } | null>(null);
   const smooth = useRef<{ x: number; y: number } | null>(null);
   const [immersive, setImmersive] = useState(true);
+  const autoStarted = useRef(false);
   const voice = useRef<BrowserVoice | null>(null);
   const player = useRef(new BlobPlayer());
 
@@ -359,7 +360,7 @@ export function Graph() {
     cam.far = Math.max(cam.far, D + 1000);
     cam.updateProjectionMatrix();
     const h = 2 * D * Math.tan((cam.fov * Math.PI) / 360) * 1.15;
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(h * cam.aspect, h), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.58, depthWrite: false }));
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(h * cam.aspect, h), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false }));
     plane.position.set(0, 0, -D);
     plane.renderOrder = -1;
     if (!cam.parent) scene.add(cam);
@@ -768,6 +769,17 @@ export function Graph() {
     say("Recording the constellation");
   };
 
+  // The constellation opens with the live camera behind it so the graph can be moved by hand right away.
+  useEffect(() => {
+    if (!ready || autoStarted.current || !HandTracker.supported()) return;
+    autoStarted.current = true;
+    const t = setTimeout(() => {
+      if (!tracker.current) void toggleCamera();
+    }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
   const reset = () => {
     select(null);
     setAnswer(null);
@@ -802,7 +814,7 @@ export function Graph() {
         )}
         <div className="ml-auto flex items-center gap-2">
           <Badge tone={camOn ? "accent" : "neutral"} icon={<Hand className="h-3 w-3" />}>
-            {camOn ? (mode === "off" ? camStatus || "Starting…" : `${MODE_TEXT[mode]}${fps ? ` · ${fps} fps` : ""}`) : "Hand gestures off"}
+            {camOn ? (mode === "off" ? camStatus || "Starting camera… allow access" : `${MODE_TEXT[mode]}${fps ? ` · ${fps} fps` : ""}`) : "Camera off · click “Use my hands”"}
           </Badge>
           <Button size="sm" variant={camOn ? "accent" : "secondary"} onClick={toggleCamera} icon={camOn ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}>
             {camOn ? "Stop camera" : "Use my hands"}
@@ -921,7 +933,13 @@ export function Graph() {
         )}
 
         {/* camera feed: drives hand tracking and (in immersive mode) the scene background */}
-        <video ref={videoRef} className={cx("absolute bottom-4 left-4 h-[150px] w-[200px] rounded-xl object-cover", camOn && !immersive ? "block" : "hidden")} style={{ transform: "scaleX(-1)" }} />
+        <video
+          ref={videoRef}
+          className={cx("absolute rounded-xl object-cover", camOn && !immersive ? "bottom-4 left-4 h-[150px] w-[200px] opacity-100" : "bottom-0 left-0 h-px w-px opacity-0")}
+          style={{ transform: "scaleX(-1)" }}
+          playsInline
+          muted
+        />
         {/* camera PiP */}
         <div className={cx("absolute bottom-4 left-4 overflow-hidden rounded-xl border border-white/15 bg-black/60 shadow-lift", camOn && !immersive ? "block" : "hidden")} style={{ width: 200, height: 150 }}>
           <canvas ref={overlayRef} width={200} height={150} className="absolute inset-0 h-full w-full" />
