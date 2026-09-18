@@ -24,6 +24,16 @@ function useTimer(running: boolean) {
   return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
 }
 
+const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+/** True when two spoken lines are the same utterance up to punctuation or a rephrased opening. */
+const sameLine = (a: string, b: string) => {
+  const x = norm(a);
+  const y = norm(b);
+  if (!x || !y) return false;
+  const head = Math.min(48, x.length, y.length);
+  return x.slice(0, head) === y.slice(0, head) || x.includes(y.slice(0, Math.min(60, y.length))) || y.includes(x.slice(0, Math.min(60, x.length)));
+};
+
 export function InterviewRoom() {
   const { id = "" } = useParams();
   const api = useApi();
@@ -34,6 +44,8 @@ export function InterviewRoom() {
   const [capture, setCapture] = useState<Capture | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
+  const turnsRef = useRef<Turn[]>([]);
+  turnsRef.current = turns;
   const [atoms, setAtoms] = useState<Atom[]>([]);
   const [engine, setEngine] = useState<EngineKind>(() => (health?.higgs ? "higgs" : BrowserVoice.supported() ? "browser" : "text"));
   const [voiceState, setVoiceState] = useState<OrbState>("off");
