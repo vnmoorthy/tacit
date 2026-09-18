@@ -304,7 +304,15 @@ export class HeuristicBrain implements Brain {
 
     if (suggested) {
       const moving = lastInterviewer && lastInterviewer.domainId !== suggested.domain.id;
-      const lead = moving ? `That's really useful. Let's turn to ${suggested.domain.name.toLowerCase()}. ` : "Got it. ";
+      // React to what was actually said: name a captured detail, admit a thin answer, or say nothing.
+      const thin = !text || wordCount(text) < 8 || /\b(i don'?t know|not sure|nothing much|no idea|can'?t think)\b/i.test(text);
+      const first = ctx.lastAtoms[0];
+      const reaction = first
+        ? `${first.type === "contact" ? "Good to know who to call" : first.type === "gotcha" ? "That's the kind of trap that never makes the manual" : first.type === "rule" ? "That's a rule worth writing down" : `Noted — ${first.title.toLowerCase()}`}. `
+        : thin && text
+          ? "Fair enough, that one's hard to pin down. "
+          : "";
+      const lead = moving ? `${reaction}Let's turn to ${suggested.domain.name.toLowerCase()}. ` : reaction;
       return { say: lead + suggested.question, kind: "new", domainId: suggested.domain.id };
     }
 

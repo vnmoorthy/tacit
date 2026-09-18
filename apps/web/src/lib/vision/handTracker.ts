@@ -190,9 +190,9 @@ export class HandTracker {
       const loop = () => {
         if (!active() || !this.running || !this.landmarker) return;
         const now = performance.now();
-        // Inference is synchronous. Process fresh camera frames at most 30 times/s,
+        // Inference is synchronous. Process fresh camera frames at most 20 times/s,
         // leaving headroom for the 3D renderer and speech on lower-powered laptops.
-        if (this.video.readyState >= 2 && this.video.currentTime !== this.lastVideoTime && now - this.lastInference >= 30) {
+        if (this.video.readyState >= 2 && this.video.currentTime !== this.lastVideoTime && now - this.lastInference >= 50) {
           this.lastVideoTime = this.video.currentTime;
           this.lastInference = now;
           try {

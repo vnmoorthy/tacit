@@ -105,6 +105,19 @@ export function Graph() {
   const [mode, setMode] = useState<Mode>("off");
   const [fps, setFps] = useState(0);
   const [typed, setTyped] = useState("");
+  const [hoverLabel, setHoverLabel] = useState<{ text: string; kind: string; x: number; y: number } | null>(null);
+  const hoverTimer = useRef(0);
+  /** Cheap hover feedback: a positioned DOM label, no scene rebuild. */
+  const showHover = (n: FGNode | null) => {
+    hoverRef.current = n?.id ?? null;
+    window.clearTimeout(hoverTimer.current);
+    if (!n || n.x === undefined || !graphRef.current) {
+      setHoverLabel(null);
+      return;
+    }
+    const p = graphRef.current.graph2ScreenCoords(n.x, n.y, n.z);
+    setHoverLabel({ text: n.label, kind: n.kind === "atom" ? n.group : n.kind === "domain" ? "domain" : n.group, x: p.x, y: p.y });
+  };
   const [voiceOn, setVoiceOn] = useState(false);
   const voiceOnRef = useRef(false);
   const [hud, setHud] = useState<string | null>(null);
@@ -296,8 +309,7 @@ export function Graph() {
         .linkDirectionalParticleColor(() => "#f6e3c3")
         .onNodeClick((n: FGNode) => select(n))
         .onNodeHover((n: FGNode | null) => {
-          hoverRef.current = n?.id ?? null;
-          void applyStyles();
+          showHover(n);
           el.style.cursor = n ? "pointer" : "default";
         })
         .onBackgroundClick(() => select(null))
@@ -305,7 +317,7 @@ export function Graph() {
       g.d3Force("charge").strength(-95).distanceMax(180);
       g.d3Force("link").distance((l: FGLink) => (l.kind === "in" ? 42 : l.kind === "mentions" ? 34 : 64));
       const renderer = g.renderer();
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+      renderer.setPixelRatio(1); // Retina rendering + bloom starves hand tracking on laptops
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.1;
       const keyLight = new THREE.DirectionalLight(0xffefd8, 3.2);
@@ -315,12 +327,12 @@ export function Graph() {
       g.lights([new THREE.HemisphereLight(0xcbdff9, 0x131924, 2), keyLight, rimLight]);
       g.controls().enableDamping = true;
       g.controls().dampingFactor = 0.12;
-      const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.24, 0.4, 0.8);
+      const bloom = new UnrealBloomPass(new THREE.Vector2(Math.ceil(el.clientWidth / 2), Math.ceil(el.clientHeight / 2)), 0.24, 0.4, 0.8);
       g.postProcessingComposer().addPass(bloom);
       g.postProcessingComposer().addPass(new OutputPass());
       ro = new ResizeObserver(() => {
         g.width(el.clientWidth).height(el.clientHeight);
-        bloom.setSize(el.clientWidth, el.clientHeight);
+        bloom.setSize(Math.ceil(el.clientWidth / 2), Math.ceil(el.clientHeight / 2));
       });
       ro.observe(el);
       await applyStyles();
@@ -425,6 +437,12 @@ export function Graph() {
   };
 
   const onFrame = (f: HandFrame) => {
+    (window as any).__tacit = {
+      t: Date.now(),
+      fps: f.fps,
+      hands: f.hands.map((h) => ({ hand: h.handedness, pointer: [Number(h.pointer.x.toFixed(2)), Number(h.pointer.y.toFixed(2))], palm: [Number(h.palm.x.toFixed(2)), Number(h.palm.y.toFixed(2))], pinch: h.pinch, pinchDistance: Number(h.pinchDistance.toFixed(2)), pointing: h.pointing, open: h.open, fist: h.fist, size: Number(h.size.toFixed(2)) })),
+      mode: modeRef.current,
+    };
     const cv = overlayRef.current;
     if (cv) {
       const ctx = cv.getContext("2d")!;
@@ -480,8 +498,7 @@ export function Graph() {
           gs.depth = Math.hypot(cam.x - (n.x ?? 0), cam.y - (n.y ?? 0), cam.z - (n.z ?? 0));
           const q = g.screen2GraphCoords(px, py, gs.depth);
           gs.offset = { x: (n.x ?? 0) - q.x, y: (n.y ?? 0) - q.y, z: (n.z ?? 0) - q.z };
-          hoverRef.current = n.id;
-          void applyStyles();
+          showHover(n);
         }
       }
       if (gs.grabbing) {
@@ -500,10 +517,10 @@ export function Graph() {
     if (input.mode === "point") {
       showCursor(px, py, "point");
       const n = nearestNode(px, py, 28);
-      if (hoverRef.current !== (n?.id ?? null)) { hoverRef.current = n?.id ?? null; void applyStyles(); }
+      if (hoverRef.current !== (n?.id ?? null)) showHover(n);
     } else {
       showCursor(null);
-      if (hoverRef.current !== null) { hoverRef.current = null; void applyStyles(); }
+      if (hoverRef.current !== null) showHover(null);
       if (input.rotate) orbit(input.rotate.x, input.rotate.y);
     }
     setModeSafe(input.mode);
@@ -952,6 +969,12 @@ export function Graph() {
           </div>
         )}
         {graphError && <div role="alert" className="absolute inset-0 grid place-items-center p-8 text-white"><div className="max-w-md rounded-xl border border-white/15 bg-[#151b24] p-6"><h2 className="text-xl">Constellation unavailable</h2><p className="mt-2 text-sm text-white/70">{graphError}. Try reopening this capture. If the 3D view still fails, enable hardware acceleration in your browser.</p><Link to={`/c/${id}/knowledge`} className="mt-4 inline-block text-accent-2 underline">Open knowledge base</Link></div></div>}
+        {hoverLabel && (
+          <div className="pointer-events-none absolute z-10 -translate-x-1/2 border border-line-2 bg-paper-2/95 px-2.5 py-1.5 text-[12.5px] text-ink shadow-lift" style={{ left: hoverLabel.x, top: hoverLabel.y + 18 }}>
+            <span className="eyebrow mr-2" style={{ color: COLORS[hoverLabel.kind] ?? "#aaa" }}>{hoverLabel.kind}</span>
+            {hoverLabel.text}
+          </div>
+        )}
         {/* gesture cursor */}
         <div ref={cursorRef} className="pointer-events-none absolute left-0 top-0 h-7 w-7 rounded-full border-2 opacity-0 transition-opacity" style={{ boxShadow: "0 0 18px 4px rgba(232,179,107,.45)", borderColor: "#f6e3c3" }} />
 
