@@ -76,6 +76,7 @@ export class HiggsVoice {
   private assistantBuf = "";
   private speakingTimer = 0;
   private language = "en";
+  private forwardAudio = true;
   private noiseFloor = 0.004;
   private gateOpenUntil = 0;
   private muted = false;
@@ -191,6 +192,7 @@ export class HiggsVoice {
         if (rms < this.noiseFloor * 1.5) this.noiseFloor = this.noiseFloor * 0.98 + rms * 0.02;
         const threshold = Math.max(0.012, this.noiseFloor * 3.5);
         if (rms > threshold) this.gateOpenUntil = now + 700;
+        if (!this.forwardAudio) return; // hybrid mode: Chrome recognition provides the words, Higgs only speaks
         const open = now < this.gateOpenUntil;
         const pcm = downsample(open ? samples : new Float32Array(samples.length), ctx.sampleRate, RATE);
         this.send({ type: "input_audio_buffer.append", audio: b64(new Uint8Array(pcm.buffer)) });
@@ -205,6 +207,12 @@ export class HiggsVoice {
 
   private send(event: unknown) {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(event));
+  }
+
+  /** Hybrid mode: stop streaming microphone audio to the model (text turns are sent instead). */
+  setAudioForwarding(on: boolean) {
+    this.forwardAudio = on;
+    if (!on) this.send({ type: "input_audio_buffer.clear" });
   }
 
   updateInstructions(instructions: string) {

@@ -18,7 +18,9 @@ How you sound (this will be spoken aloud, so write the way a thoughtful person t
 - One question per turn. Keep each reply under 55 words.`
 
 export const LANGUAGES: { code: string; name: string }[] = [
-  { code: "en-US", name: "English" },
+  { code: "en-US", name: "English (US)" },
+  { code: "en-IN", name: "English (India)" },
+  { code: "en-GB", name: "English (UK)" },
   { code: "es-ES", name: "Spanish" },
   { code: "es-MX", name: "Spanish (Mexico)" },
   { code: "pt-BR", name: "Portuguese (Brazil)" },

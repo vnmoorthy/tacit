@@ -62,6 +62,23 @@ export function InterviewRoom() {
 
   const bv = useRef<BrowserVoice | null>(null);
   const hv = useRef<HiggsVoice | null>(null);
+  const hybridEars = useRef<BrowserVoice | null>(null);
+  const earsHeartbeat = useRef({ lastWords: 0, loudSince: 0, wantSince: 0, timer: 0 });
+  const noteLoudness = (level: number) => {
+    const hb = earsHeartbeat.current;
+    const now = Date.now();
+    if (level > 0.12) {
+      if (!hb.loudSince) hb.loudSince = now;
+    } else if (hb.loudSince && now - hb.loudSince > 1500) hb.loudSince = 0;
+  };
+  const dropEars = (why: string) => {
+    if (!hybridEars.current) return;
+    hybridEars.current.destroy();
+    hybridEars.current = null;
+    hv.current?.setAudioForwarding(true);
+    window.clearInterval(earsHeartbeat.current.timer);
+    toast(`${why} Higgs is now listening to your voice directly.`, "info");
+  };
   const recorder = useRef<ReferenceRecorder | null>(null);
   const [reference, setReference] = useState<{ blob: Blob; transcript: string } | null>(null);
   const [recordConsent, setRecordConsent] = useState(false);
@@ -209,6 +226,9 @@ export function InterviewRoom() {
     bv.current?.destroy();
     hv.current?.disconnect();
     bv.current = null;
+    window.clearInterval(earsHeartbeat.current.timer);
+    hybridEars.current?.destroy();
+    hybridEars.current = null;
     hv.current = null;
     engineRef.current = "text";
     mutedRef.current = false;
@@ -259,11 +279,20 @@ export function InterviewRoom() {
         if (room !== generation.current) return;
         skipFirstAssistant.current = true;
         const voice = new HiggsVoice({
-          onState: setVoiceState,
-          onLevel: setLevel,
+          onState: (st) => {
+            setVoiceState(st);
+            const ears = hybridEars.current;
+            if (!ears) return;
+            if (st === "speaking" || st === "thinking") { ears.stopListening(); earsHeartbeat.current.wantSince = 0; }
+            else if (st === "listening" || st === "idle") { earsHeartbeat.current.wantSince ||= Date.now(); ears.listen(); }
+          },
+          onLevel: (level) => { setLevel(level); noteLoudness(level); },
           onError: (message) => toast(message, "error"),
           onDisconnect: () => { if (room === generation.current && !endingRef.current) useTextMode(); },
-          onUserTranscript: (text) => submitRef.current(text, "voice"),
+          onUserTranscript: (text) => {
+            if (hybridEars.current) return; // Chrome recognition is the transcript source in hybrid mode
+            submitRef.current(text, "voice");
+          },
           onUserPartial: setPartial,
           onAssistantPartial: setAssistantPartial,
           onAssistantTranscript: (text) => {
@@ -293,6 +322,48 @@ export function InterviewRoom() {
         });
         hv.current = voice;
         await voice.connect({ ...info, instructions: `${info.instructions}\n\nBegin the session by saying exactly this, then wait for the answer: "${result.interviewerTurn.text}"` });
+        // Hybrid ears: Chrome's recognizer supplies accurate words (accents, 18 languages); Higgs speaks and replies fast.
+        if (BrowserVoice.recognitionSupported()) {
+          const ears = new BrowserVoice(
+            {
+              onPartial: (t) => {
+                earsHeartbeat.current.lastWords = Date.now();
+                setPartial(t);
+              },
+              onFinal: (text) => {
+                earsHeartbeat.current.lastWords = Date.now();
+                setPartial("");
+                submitRef.current(text, "voice");
+                try {
+                  hv.current?.sendText(text);
+                } catch {
+                  /* voice disconnected; the text turn is still saved */
+                }
+              },
+              onState: (st) => { if (st === "listening") earsHeartbeat.current.wantSince = 0; },
+              onLevel: () => undefined, // the Higgs mic meter is the single level source
+              onError: () => dropEars("Chrome speech recognition is unavailable."),
+            },
+            capture.expert.language,
+          );
+          try {
+            await ears.init();
+            hybridEars.current = ears;
+            voice.setAudioForwarding(false);
+            ears.listen();
+            earsHeartbeat.current = { lastWords: Date.now(), loudSince: 0, wantSince: Date.now(), timer: 0 };
+            earsHeartbeat.current.timer = window.setInterval(() => {
+              const hb = earsHeartbeat.current;
+              const now = Date.now();
+              // Recognition was asked to listen but never started (no speech service): hand the audio to Higgs.
+              if (hb.wantSince && now - hb.wantSince > 4000) return dropEars("Chrome speech recognition did not start.");
+              // Speech has been audible for a while but recognition produced no words: fall back to raw audio.
+              if (hb.loudSince && now - hb.loudSince > 2500 && now - hb.lastWords > 6000) dropEars("Chrome speech recognition isn't returning words.");
+            }, 1000);
+          } catch {
+            hybridEars.current = null;
+          }
+        }
       } else { setVoiceState("idle"); }
     } catch (error) {
       if (room !== generation.current) return;
@@ -343,6 +414,9 @@ export function InterviewRoom() {
     }
     bv.current?.destroy();
     bv.current = null;
+    window.clearInterval(earsHeartbeat.current.timer);
+    hybridEars.current?.destroy();
+    hybridEars.current = null;
     hv.current = null;
     setVoiceState("off");
     try {
@@ -383,7 +457,7 @@ export function InterviewRoom() {
   /* ────────────────────────── pre-flight ────────────────────────── */
   if (!session) {
     const options: { k: EngineKind; title: string; body: string; ok: boolean; why?: string }[] = [
-      { k: "higgs", title: "Higgs Realtime", body: "Natural speech with live turn-taking. Speak freely or type your answer.", ok: Boolean(health?.higgs), why: "Natural voice is not connected for this workspace" },
+      { k: "higgs", title: "Higgs Realtime", body: "Natural speech with live turn-taking. In Chrome your words are recognised locally for accents and 18 languages; Higgs listens directly elsewhere.", ok: Boolean(health?.higgs), why: "Natural voice is not connected for this workspace" },
       { k: "browser", title: "Browser voice", body: "Speech recognition with natural spoken questions when connected. Chrome works best.", ok: BrowserVoice.supported(), why: "Speech APIs unavailable in this browser" },
       { k: "text", title: "Type answers", body: "Same interviewer, no microphone. Handy in a noisy room.", ok: true },
     ];

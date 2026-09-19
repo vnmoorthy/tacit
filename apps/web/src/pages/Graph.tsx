@@ -437,12 +437,6 @@ export function Graph() {
   };
 
   const onFrame = (f: HandFrame) => {
-    (window as any).__tacit = {
-      t: Date.now(),
-      fps: f.fps,
-      hands: f.hands.map((h) => ({ hand: h.handedness, pointer: [Number(h.pointer.x.toFixed(2)), Number(h.pointer.y.toFixed(2))], palm: [Number(h.palm.x.toFixed(2)), Number(h.palm.y.toFixed(2))], pinch: h.pinch, pinchDistance: Number(h.pinchDistance.toFixed(2)), pointing: h.pointing, open: h.open, fist: h.fist, size: Number(h.size.toFixed(2)) })),
-      mode: modeRef.current,
-    };
     const cv = overlayRef.current;
     if (cv) {
       const ctx = cv.getContext("2d")!;
